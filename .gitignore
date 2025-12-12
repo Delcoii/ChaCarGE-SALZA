@@ -1,0 +1,45 @@
+.metadata/
+
+# STM32CubeIDE build folders
+**/Debug/
+**/Release/
+**/Drivers/
+**/Middlewares/
+
+# STM32CubeIDE generated files
+*.project
+*.cproject
+*.mxproject
+*.ld
+*.launch
+*.log
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.o
+*.d
+*.su
+*.a
+*.dep
+*.i
+*.s
+*.cyclo
+
+# etc IDE files
+.settings/
+.ipch/
+*.user
+*.suo
+*.swp
+*.db
+*.opendb
+*.mdb
+
+# etc unnecessary files
+*.bak
+*.tmp
+*.old
+*.orig
+*.swp
