@@ -1,15 +1,15 @@
 # Telechips Embedded School 3rd  - Final Project
 - Driving Habit Improvement System Using Driving Platform & Data
 - Vehicle Platform Construction
-    - Seonghoon Park
+    - **Seonghoon Park**
 - Traffic Light Recognition Algorithm
-    - Jin Jeon
+    - **Jin Jeon**
 - Driving Habit Improvement Algorithm Development
-    - Sewon Park
+    - **Sewon Park**
 - Communication Environment Construction
-    - Myunghoon Jung
+    - **Myunghoon Jung**
 - Infotainment GUI Development & Yocto Linux Environment
-    - Jaeyeon Jang
+    - **Jaeyeon Jang**
 
 
 ## Applications
@@ -22,7 +22,7 @@
 - ONNX model optimization
 - Quantitative evaluation of device-specific performance
 
-### Driving Habit Improvement Algorithm Development (Sewon Park)
+### Driving Habit Improvement Algorithm Development
 - Definition of good driving habits
 - Generation of virtual sensor data
 - Development of driving score calculation algorithm based on sensor data
