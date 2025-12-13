@@ -51,3 +51,8 @@
 - CAN Bus Communication System
     - MCP2551
     - MCP2515
+
+
+## Etc
+- SW Architecture Visualize
+    - https://www.figma.com/board/bwHBJY9MHmDYQepsaSl41v/%ED%85%94%EB%A0%88%EC%B9%A9%EC%8A%A4-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EC%86%8C%ED%94%84%ED%8A%B8%EC%9B%A8%EC%96%B4-%EC%95%84%ED%82%A4%ED%85%8D%EC%B3%90?node-id=0-1
