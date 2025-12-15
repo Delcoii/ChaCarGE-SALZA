@@ -1,4 +1,4 @@
-/* yolo 실제 카메라 VNC or screen 확인 예제 코드 */
+# to visualize : uncomment cv2.imshow("Traffic Light Detection", frame)
 
 import cv2
 import numpy as np
@@ -122,7 +122,7 @@ while True:
     # -----------------------------
     # Display
     # -----------------------------
-    cv2.imshow("Traffic Light Detection", frame)
+    # cv2.imshow("Traffic Light Detection", frame)
 
     if cv2.waitKey(1) & 0xFF == 27:
         break
