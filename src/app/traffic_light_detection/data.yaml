@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 3
+names: ['green light', 'red light', 'yellow light']
+
+roboflow:
+  workspace: traffic-light-for-yolo
+  project: traffic-light-reconizetion
+  version: 4
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/traffic-light-for-yolo/traffic-light-reconizetion/dataset/4
