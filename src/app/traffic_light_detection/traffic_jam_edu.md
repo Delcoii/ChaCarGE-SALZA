@@ -1,3 +1,6 @@
+#모든 실행 과정은 google colab , 또는 kaggle(좀 수정) 해서 진행!! -> 코드를 지피티 넣고 kaggle 실행으로 바꿔야한다.
+속도는 kaggle이 colab 보다 3~4배 빠릅니다. (설정 필요)
+
 ```
 !pip install ultralytics
 ```
