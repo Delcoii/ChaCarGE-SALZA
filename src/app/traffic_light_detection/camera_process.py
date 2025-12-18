@@ -6,12 +6,18 @@ from multiprocessing import shared_memory
 FRAME_W, FRAME_H, FRAME_C = 320, 240, 3
 
 def camera_process(shm_name):
-    cap = cv2.VideoCapture(1)
+    # Open camera device
+    cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_W)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_H)
 
+    # Attach to shared memory
     shm = shared_memory.SharedMemory(name=shm_name)
-    frame_array = np.ndarray((FRAME_H, FRAME_W, FRAME_C), dtype=np.uint8, buffer=shm.buf)
+    frame_array = np.ndarray(
+        (FRAME_H, FRAME_W, FRAME_C),
+        dtype=np.uint8,
+        buffer=shm.buf
+    )
 
     frame_count = 0
     start = time.time()
@@ -21,14 +27,16 @@ def camera_process(shm_name):
         if not ret:
             continue
 
-        # 최신 프레임을 공유 메모리에 복사
+        # Copy the latest frame into shared memory
         frame_array[:] = frame[:FRAME_H, :FRAME_W, :]
+
         frame_count += 1
 
-        # 1초마다 FPS 출력
+        # Print FPS every 1 second
         if time.time() - start >= 1.0:
             print(f"[Camera] FPS={frame_count}")
             frame_count = 0
             start = time.time()
 
+        # Small sleep to reduce CPU usage
         time.sleep(0.001)
