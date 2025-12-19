@@ -58,8 +58,17 @@ UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
-osThreadId TaskRemotePulseHandle;
-osThreadId TaskPrintResultHandle;
+osThreadId defaultTaskHandle;
+osThreadId inputCaptureTaskHandle;
+osThreadId serialTaskHandle;
+osSemaphoreId inputCaptureSemHandle;
+osMessageQId inputCaptureQueueHandle;
+
+volatile uint32_t icValue1 = 0;
+volatile uint32_t icValue2 = 0;
+volatile uint32_t diffCapture = 0;
+volatile uint32_t frequency = 0;
+volatile uint8_t isFirstCapture = 1;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -73,8 +82,9 @@ static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
-void GetRemotePulse(void const * argument);
-void PrintResultSerial(void const * argument);
+void StartDefaultTask(void const * argument);
+void StartInputCaptureTask(void const * argument);
+void StartSerialTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -145,13 +155,9 @@ int main(void)
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of TaskRemotePulse */
-  osThreadDef(TaskRemotePulse, GetRemotePulse, osPriorityNormal, 0, 128);
-  TaskRemotePulseHandle = osThreadCreate(osThread(TaskRemotePulse), NULL);
-
-  /* definition and creation of TaskPrintResult */
-  osThreadDef(TaskPrintResult, PrintResultSerial, osPriorityLow, 0, 512);
-  TaskPrintResultHandle = osThreadCreate(osThread(TaskPrintResult), NULL);
+  /* definition and creation of defaultTask */
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
+  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -454,7 +460,8 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  // sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 5;
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
@@ -705,14 +712,14 @@ void StartSerialTask(void const * argument)
 /* USER CODE END StartSerialTask */
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_GetRemotePulse */
+/* USER CODE BEGIN Header_StartDefaultTask */
 /**
-  * @brief  Function implementing the TaskRemotePulse thread.
+  * @brief  Function implementing the defaultTask thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_GetRemotePulse */
-void GetRemotePulse(void const * argument)
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
@@ -721,24 +728,6 @@ void GetRemotePulse(void const * argument)
     osDelay(1);
   }
   /* USER CODE END 5 */
-}
-
-/* USER CODE BEGIN Header_PrintResultSerial */
-/**
-* @brief Function implementing the TaskPrintResult thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_PrintResultSerial */
-void PrintResultSerial(void const * argument)
-{
-  /* USER CODE BEGIN PrintResultSerial */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END PrintResultSerial */
 }
 
 /**
