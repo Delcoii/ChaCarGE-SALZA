@@ -164,7 +164,7 @@ int main(void)
   osThreadDef(inputCaptureTask, StartInputCaptureTask, osPriorityNormal, 0, 128);
   inputCaptureTaskHandle = osThreadCreate(osThread(inputCaptureTask), NULL);
 
-  osThreadDef(serialTask, StartSerialTask, osPriorityLow, 0, 128);
+  osThreadDef(serialTask, StartSerialTask, osPriorityLow, 0, 512);
   serialTaskHandle = osThreadCreate(osThread(serialTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
@@ -460,7 +460,8 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  // sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 5;
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
@@ -681,8 +682,8 @@ void StartInputCaptureTask(void const * argument)
     // Wait for the semaphore (signal from ISR)
     if (osSemaphoreWait(inputCaptureSemHandle, osWaitForever) == osOK)
     {
-      // diffCapture is now the Pulse Width in microseconds (assuming 1MHz timer)
-      // Send width to Queue
+      // diffCapture is now the Pulse Width in microseconds
+      // Send width to Queue with 0 timeout (don't block if queue is full)
       osMessagePut(inputCaptureQueueHandle, diffCapture, 0);
     }
   }
