@@ -59,6 +59,16 @@ UART_HandleTypeDef huart3;
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 osThreadId defaultTaskHandle;
+osThreadId inputCaptureTaskHandle;
+osThreadId serialTaskHandle;
+osSemaphoreId inputCaptureSemHandle;
+osMessageQId inputCaptureQueueHandle;
+
+volatile uint32_t icValue1 = 0;
+volatile uint32_t icValue2 = 0;
+volatile uint32_t diffCapture = 0;
+volatile uint32_t frequency = 0;
+volatile uint8_t isFirstCapture = 1;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -73,6 +83,8 @@ static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
 void StartDefaultTask(void const * argument);
+void StartInputCaptureTask(void const * argument);
+void StartSerialTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -119,7 +131,7 @@ int main(void)
   MX_TIM1_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -128,6 +140,8 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
+  osSemaphoreDef(inputCaptureSem);
+  inputCaptureSemHandle = osSemaphoreCreate(osSemaphore(inputCaptureSem), 1);
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -136,6 +150,8 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
+  osMessageQDef(inputCaptureQueue, 16, uint32_t);
+  inputCaptureQueueHandle = osMessageCreate(osMessageQ(inputCaptureQueue), NULL);
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -145,6 +161,11 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  osThreadDef(inputCaptureTask, StartInputCaptureTask, osPriorityNormal, 0, 128);
+  inputCaptureTaskHandle = osThreadCreate(osThread(inputCaptureTask), NULL);
+
+  osThreadDef(serialTask, StartSerialTask, osPriorityLow, 0, 128);
+  serialTaskHandle = osThreadCreate(osThread(serialTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -613,7 +634,87 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+  {
+    if (isFirstCapture) // First Edge
+    {
+      icValue1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+      isFirstCapture = 0;
+    }
+    else // Second Edge
+    {
+      icValue2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
 
+      if (icValue2 > icValue1)
+      {
+        diffCapture = icValue2 - icValue1;
+      }
+      else if (icValue2 < icValue1)
+      {
+        // Handle timer overflow
+        diffCapture = (0xFFFFFFFF - icValue1) + icValue2;
+      }
+      else
+      {
+        diffCapture = 0;
+      }
+
+      // Signal the task
+      osSemaphoreRelease(inputCaptureSemHandle);
+      
+      isFirstCapture = 1; // Reset for next measurement
+    }
+  }
+}
+
+void StartInputCaptureTask(void const * argument)
+{
+  /* USER CODE BEGIN StartInputCaptureTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    // Wait for the semaphore (signal from ISR)
+    if (osSemaphoreWait(inputCaptureSemHandle, osWaitForever) == osOK)
+    {
+      // Calculate frequency: Timer clock = 1MHz (1us tick)
+      if (diffCapture != 0)
+      {
+        frequency = 1000000 / diffCapture;
+      }
+      else 
+      {
+        frequency = 0;
+      }
+      
+      // Send frequency to Queue
+      osMessagePut(inputCaptureQueueHandle, frequency, 0);
+    }
+  }
+  /* USER CODE END StartInputCaptureTask */
+}
+
+/* USER CODE BEGIN StartSerialTask */
+void StartSerialTask(void const * argument)
+{
+  osEvent event;
+  char buffer[50];
+
+  for(;;)
+  {
+    // Wait for data from Queue (timeout 1000ms)
+    event = osMessageGet(inputCaptureQueueHandle, 1000);
+
+    if (event.status == osEventMessage)
+    {
+      uint32_t freq = event.value.v;
+      int len = sprintf(buffer, "Freq: %lu Hz\r\n", freq);
+      HAL_UART_Transmit(&huart3, (uint8_t*)buffer, len, 100);
+    }
+  }
+}
+/* USER CODE END StartSerialTask */
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
