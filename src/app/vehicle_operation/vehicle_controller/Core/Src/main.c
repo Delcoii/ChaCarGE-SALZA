@@ -638,33 +638,36 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
   {
-    if (isFirstCapture) // First Edge
+    uint32_t currentCapture = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+    
+    // Check pin state to determine edge type (TIM2 CH1 is usually PA5)
+    // High state means we just had a Rising Edge (if polarity logic is standard)
+    // BUT in BothEdge mode, we are checking the state AFTER the edge.
+    // If we just had a Rising edge, pin should be HIGH.
+    // If we just had a Falling edge, pin should be LOW.
+    
+    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET) 
     {
-      icValue1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-      isFirstCapture = 0;
+      // Rising Edge: Start measurement
+      icValue1 = currentCapture;
     }
-    else // Second Edge
+    else 
     {
-      icValue2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+      // Falling Edge: End measurement (High Pulse Width)
+      icValue2 = currentCapture;
 
-      if (icValue2 > icValue1)
+      if (icValue2 >= icValue1)
       {
         diffCapture = icValue2 - icValue1;
       }
-      else if (icValue2 < icValue1)
+      else
       {
         // Handle timer overflow
         diffCapture = (0xFFFFFFFF - icValue1) + icValue2;
       }
-      else
-      {
-        diffCapture = 0;
-      }
-
-      // Signal the task
-      osSemaphoreRelease(inputCaptureSemHandle);
       
-      isFirstCapture = 1; // Reset for next measurement
+      // Send Pulse Width (in microseconds if 1MHz timer)
+      osSemaphoreRelease(inputCaptureSemHandle);
     }
   }
 }
@@ -678,18 +681,9 @@ void StartInputCaptureTask(void const * argument)
     // Wait for the semaphore (signal from ISR)
     if (osSemaphoreWait(inputCaptureSemHandle, osWaitForever) == osOK)
     {
-      // Calculate frequency: Timer clock = 1MHz (1us tick)
-      if (diffCapture != 0)
-      {
-        frequency = 1000000 / diffCapture;
-      }
-      else 
-      {
-        frequency = 0;
-      }
-      
-      // Send frequency to Queue
-      osMessagePut(inputCaptureQueueHandle, frequency, 0);
+      // diffCapture is now the Pulse Width in microseconds (assuming 1MHz timer)
+      // Send width to Queue
+      osMessagePut(inputCaptureQueueHandle, diffCapture, 0);
     }
   }
   /* USER CODE END StartInputCaptureTask */
@@ -708,8 +702,8 @@ void StartSerialTask(void const * argument)
 
     if (event.status == osEventMessage)
     {
-      uint32_t freq = event.value.v;
-      int len = sprintf(buffer, "Freq: %lu Hz\r\n", freq);
+      uint32_t width = event.value.v;
+      int len = sprintf(buffer, "Width: %lu us\r\n", width);
       HAL_UART_Transmit(&huart3, (uint8_t*)buffer, len, 100);
     }
   }
