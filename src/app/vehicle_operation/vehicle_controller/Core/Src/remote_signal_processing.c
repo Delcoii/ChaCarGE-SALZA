@@ -57,17 +57,19 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
     }
 
     // if every channel is received, release the semaphore
-    // if (rx_sync_flags_ == RX_FLAG_ALL) {
-    //     xSemaphoreGiveFromISR(remote_sig_sem_handle_, &xHigherPriorityTaskWoken);
-    //     rx_sync_flags_ = 0;
-    // }
+    if (rx_sync_flags_ == RX_FLAG_ALL) {
+        xSemaphoreGiveFromISR(remote_sig_sem_handle_, &xHigherPriorityTaskWoken);
+        rx_sync_flags_ = 0;
+        HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+    }
 }
 
 
 RemoteSignals_t GetRemoteSignals(void) {
-    // if (xSemaphoreTakeFromISR(remote_sig_sem_handle_, &xHigherPriorityTaskWoken) == pdPASS) {
-    //     return remote_signals;
-    // }
+    if (osSemaphoreWait(remote_sig_sem_handle_, osWaitForever) == osOK) {
+        return remote_signals;
+    }
 
+    HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
     return remote_signals; // Should not reach here
 }

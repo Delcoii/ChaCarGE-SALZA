@@ -653,10 +653,10 @@ void EntryGetRemote(void const * argument)
 
   /* Infinite loop */
   for(;;) {
-    // remote_signals = GetRemoteSignals();    // semaphore wait function
+    remote_signals = GetRemoteSignals();    // semaphore wait function
 
 
-    /*
+
     // Allocate memory block from pool
     pMsg = (AppMessage_t*)osPoolAlloc(appMsgPoolHandle);
     
@@ -671,7 +671,7 @@ void EntryGetRemote(void const * argument)
             osPoolFree(appMsgPoolHandle, pMsg);
         }
     }
-    */
+
     static uint32_t prev_tick = 0;
     uint32_t curr_tick = HAL_GetTick();
     if (curr_tick - prev_tick >= 1000) { // 1초 경과하면 토글
@@ -698,7 +698,6 @@ void EntryPrintResult(void const * argument)
   /* Infinite loop */
   for(;;) {
   
-    /*
     event = osMessageGet(PrintDataHandle, osWaitForever); // Wait forever  
     if (event.status == osEventMessage) {
       // Get pointer from queue
@@ -714,7 +713,7 @@ void EntryPrintResult(void const * argument)
                                 sig->throttle_pulse_width_us,
                                 sig->mode_pulse_width_us,
                                 sig->brake_pulse_width_us);
-              // HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 10);
+              HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 10);
 
           }
           // else if (pMsg->type == MSG_TYPE_MOTOR_STATUS) { ... }
@@ -722,10 +721,13 @@ void EntryPrintResult(void const * argument)
           // Free memory block back to pool
           osPoolFree(appMsgPoolHandle, pMsg);
       }
-    }*/
+    }
 
-    HAL_UART_Transmit_IT(&huart3, "Test\r\n", 6);
+    /*
+    char test_str[] = "Test\r\n";
+    HAL_UART_Transmit(&huart3, (uint8_t*)test_str, strlen(test_str), 10);
     osDelay(200);
+    */
   }
   /* USER CODE END EntryPrintResult */
 }
