@@ -60,6 +60,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
+osMessageQId PrintDataHandle;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -130,18 +131,19 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
-  osSemaphoreDef(inputCaptureSem);
-  inputCaptureSemHandle = osSemaphoreCreate(osSemaphore(inputCaptureSem), 1);
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
+  /* Create the queue(s) */
+  /* definition and creation of PrintData */
+  osMessageQDef(PrintData, 16, uint32_t);
+  PrintDataHandle = osMessageCreate(osMessageQ(PrintData), NULL);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
-  osMessageQDef(inputCaptureQueue, 16, uint32_t);
-  inputCaptureQueueHandle = osMessageCreate(osMessageQ(inputCaptureQueue), NULL);
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -155,11 +157,6 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-  osThreadDef(inputCaptureTask, StartInputCaptureTask, osPriorityNormal, 0, 128);
-  inputCaptureTaskHandle = osThreadCreate(osThread(inputCaptureTask), NULL);
-
-  osThreadDef(serialTask, StartSerialTask, osPriorityLow, 0, 512);
-  serialTaskHandle = osThreadCreate(osThread(serialTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -631,7 +628,6 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE END 4 */
 
-
 /* USER CODE BEGIN Header_EntryGetRemote */
 /**
   * @brief  Function implementing the TaskGetRemote thread.
@@ -646,6 +642,7 @@ void EntryGetRemote(void const * argument)
   /* Infinite loop */
   for(;;) {
     remote_signals = GetRemoteSignals();    // semaphore wait function
+    osMessagePut(PrintDataHandle, &remote_signals, 0);
   }
   /* USER CODE END 5 */
 }
@@ -660,10 +657,21 @@ void EntryGetRemote(void const * argument)
 void EntryPrintResult(void const * argument)
 {
   /* USER CODE BEGIN EntryPrintResult */
+  osEvent event;
+  RemoteSignals_t remote_signals;
   /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
+  for(;;) {
+    event = osMessageGet(PrintDataHandle, 10000);
+    if (event.status == osEventMessage) {
+      remote_signals = event.value.v;
+      char str[50];
+      int str_len = snprintf(str, sizeof(str), "%d us\t%d us\t%d us\t%d us\n",
+                        remote_signals.steering_pulse_width_us,
+                        remote_signals.throttle_pulse_width_us,
+                        remote_signals.mode_pulse_width_us,
+                        remote_signals.brake_pulse_width_us);
+      HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 10);
+    }
   }
   /* USER CODE END EntryPrintResult */
 }
