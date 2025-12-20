@@ -24,7 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "remote_signal_processing.h"
-#include "app_message.h" // Include AppMessage definitions
+#include "app_message.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,8 +62,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
 /* USER CODE BEGIN PV */
-osPoolId appMsgPoolHandle;
-osMessageQId PrintDataHandle;
+osMutexId appDataMutexHandle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -84,7 +83,8 @@ void EntryPrintResult(void const * argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+// Shared Memory
+AppMessage_t g_SystemState;
 /* USER CODE END 0 */
 
 /**
@@ -131,6 +131,8 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
+  osMutexDef(appDataMutex);
+  appDataMutexHandle = osMutexCreate(osMutex(appDataMutex));
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -139,8 +141,7 @@ int main(void)
   // from remote_signal_processing.h
   osSemaphoreDef(remoteSigSem);
   remote_sig_sem_handle_ = osSemaphoreCreate(osSemaphore(remoteSigSem), 1);
-
-
+  
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -148,13 +149,7 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
-  /* Create Memory Pool */
-  osPoolDef(appMsgPool, 16, AppMessage_t);
-  appMsgPoolHandle = osPoolCreate(osPool(appMsgPool));
-
-  /* Create Queue for Pointers (AppMessage_t*) */
-  osMessageQDef(PrintData, 16, AppMessage_t*);
-  PrintDataHandle = osMessageCreate(osMessageQ(PrintData), NULL);
+  /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -650,30 +645,25 @@ void EntryGetRemote(void const * argument)
 {
   /* USER CODE BEGIN 5 */
   RemoteSignals_t remote_signals;
-  AppMessage_t *pMsg;
 
   /* Infinite loop */
   for(;;) {
-    remote_signals = GetRemoteSignals();    // semaphore wait function
+    // 1. Wait for New Data (Event-Driven) from ISR
+    remote_signals = GetRemoteSignals(); // This function waits for semaphore
 
-    // Allocate memory block from pool
-    pMsg = (AppMessage_t*)osPoolAlloc(appMsgPoolHandle);
+    // 2. Update Shared Memory (Protected by Mutex)
+    osMutexWait(appDataMutexHandle, osWaitForever);
     
-    if (pMsg != NULL) {
-        // Prepare Message FIRST
-        pMsg->type = MSG_TYPE_REMOTE_SIGNAL;
-        pMsg->payload.remote = remote_signals;
-        
-        // THEN put into queue
-        if (osMessagePut(PrintDataHandle, (uint32_t)pMsg, 0) != osOK) {
-            // Failed to put message (Queue Full): return memory block back to pool
-            osPoolFree(appMsgPoolHandle, pMsg);
-        }
-    }
+    // Set type and copy data to global shared memory
+    g_SystemState.type = MSG_TYPE_REMOTE_SIGNAL;
+    g_SystemState.payload.remote = remote_signals;
     
+    osMutexRelease(appDataMutexHandle);
+
+    // Toggle LED to indicate task is alive
     static uint32_t prev_tick = 0;
     uint32_t curr_tick = HAL_GetTick();
-    if (curr_tick - prev_tick >= 1000) { 
+    if (curr_tick - prev_tick >= 1000) { // 1Hz Toggle
       HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
       prev_tick = curr_tick;
     }
@@ -691,39 +681,37 @@ void EntryGetRemote(void const * argument)
 void EntryPrintResult(void const * argument)
 {
   /* USER CODE BEGIN EntryPrintResult */
-  osEvent event;
-  AppMessage_t *pMsg;
+  AppMessage_t current_state;
+  char str[100];
+  int str_len;
 
   /* Infinite loop */
   for(;;) {
-    event = osMessageGet(PrintDataHandle, osWaitForever); // Wait forever  
-    
-    if (event.status == osEventMessage) {
-      // Get pointer from queue
-      pMsg = (AppMessage_t*)event.value.p;
-      
-      if (pMsg != NULL) {
-          // Check Message Type
-          if (pMsg->type == MSG_TYPE_REMOTE_SIGNAL) {
-              RemoteSignals_t *sig = &pMsg->payload.remote;
-              char str[100]; // Increased buffer size just in case
-              int str_len = snprintf(str, sizeof(str), "CH1:%lu\tCH2:%lu\tCH3:%lu\tCH4:%lu\r\n",
-                                sig->steering_pulse_width_us,
-                                sig->throttle_pulse_width_us,
-                                sig->mode_pulse_width_us,
-                                sig->brake_pulse_width_us);
-              HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 10);
-          }
-          // else if (pMsg->type == MSG_TYPE_MOTOR_STATUS) { ... }
+    // 1. Polling Period (200ms) - Controls output rate
+    osDelay(200);
 
-          // Free memory block back to pool
-          osPoolFree(appMsgPoolHandle, pMsg);
-      }
+    
+    // 2. Read Shared Memory (Protected by Mutex)
+    osMutexWait(appDataMutexHandle, osWaitForever);
+    current_state = g_SystemState; // Copy Global to Local safely
+    osMutexRelease(appDataMutexHandle);
+
+    // 3. Process Data based on Type
+    switch (current_state.type) {
+        case MSG_TYPE_REMOTE_SIGNAL:
+        {
+            RemoteSignals_t *sig = &current_state.payload.remote;
+            str_len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
+                              sig->steering_pulse_width_us,
+                              sig->throttle_pulse_width_us,
+                              sig->mode_pulse_width_us,
+                              sig->brake_pulse_width_us);
+            HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+            break;
+        }
+        // case MSG_TYPE_MOTOR_STATUS: ...
     }
     
-    // Optional delay to throttle output if needed, but not strictly necessary 
-    // if EntryGetRemote is producing data at a reasonable rate.
-    // osDelay(200); 
   }
   /* USER CODE END EntryPrintResult */
 }

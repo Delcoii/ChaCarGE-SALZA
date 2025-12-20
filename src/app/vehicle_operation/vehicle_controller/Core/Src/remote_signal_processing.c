@@ -16,7 +16,7 @@ static inline uint32_t CalcPulseWidth(uint32_t rising, uint32_t falling) {
     else return (0xFFFFFFFF - rising) + falling;
 }
 
-// BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
     if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
         current_capture_us_ = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);

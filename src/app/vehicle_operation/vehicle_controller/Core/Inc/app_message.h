@@ -41,10 +41,5 @@ typedef struct {
 } AppMessage_t;
 
 
-// --- Shared Resources Handles ---
-// Defined in main.c
-extern osPoolId appMsgPoolHandle;
-extern osMessageQId PrintDataHandle;
-
 
 #endif // __APP_MESSAGE_H__

@@ -4,7 +4,7 @@
 
 #include "main.h"
 #include "cmsis_os.h"
-#include "app_message.h" // Include the new message header
+#include "app_message.h" 
 
 // bit flag for checking all channel received
 #define RX_FLAG_CH1  (1 << 0) // 0x01
@@ -12,10 +12,6 @@
 #define RX_FLAG_CH3  (1 << 2) // 0x04
 #define RX_FLAG_CH4  (1 << 3) // 0x08
 #define RX_FLAG_ALL  (0x0F)   // all channel received
-
-
-
-
 
 
 extern osSemaphoreId remote_sig_sem_handle_;
