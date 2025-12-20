@@ -1,16 +1,18 @@
 #include "steer_adc_processing.h"
 
 osSemaphoreId steer_adc_sem_handle_;
+uint32_t adc_val;
+
 extern ADC_HandleTypeDef hadc1;
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-    if (hadc->Instance == ADC1) {
-        osSemaphoreRelease(steer_adc_sem_handle_);
-    }
+    osSemaphoreRelease(steer_adc_sem_handle_);
 }
 
-uint16_t GetSteerADCValue(void) {
-    if (osSemaphoreWait(steer_adc_sem_handle_, osWaitForever) == osOK) {
+uint32_t GetSteerADCValue(void) {
+    HAL_ADC_Start_IT(&hadc1);
+
+    if (osSemaphoreWait(steer_adc_sem_handle_, 100) == osOK) {
         return HAL_ADC_GetValue(&hadc1);
     }
 

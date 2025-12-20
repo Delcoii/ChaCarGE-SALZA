@@ -127,12 +127,9 @@ int main(void)
   MX_TIM1_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
 
-  HAL_ADC_Start_IT(&hadc1);
+
+  
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -661,6 +658,11 @@ static void MX_GPIO_Init(void)
 void EntryGetRemote(void const * argument)
 {
   /* USER CODE BEGIN 5 */
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
+
   RemoteSignals_t remote_signals;
 
   /* Infinite loop */
@@ -709,13 +711,19 @@ void EntryPrintResult(void const * argument)
     osMutexRelease(vehicleDataMutexHandle);
 
     // print remote signals
+    int str_len = 0;
     if (event_bits & EVT_REMOTE_UPDATED) {
-        int len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
+        str_len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
                           print_data.remote.steering_pulse_width_us,
                           print_data.remote.throttle_pulse_width_us,
                           print_data.remote.mode_pulse_width_us,
                           print_data.remote.brake_pulse_width_us);
-        HAL_UART_Transmit(&huart3, (uint8_t*)str, len, 100);
+        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+    }
+
+    if (event_bits & EVT_STEER_ADC_UPDATED) {
+        str_len = snprintf(str, sizeof(str), "ADC: %lu\r\n", print_data.steer_adc);
+        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
     
     // if (event_bits & EVT_MOTOR_UPDATED) { ... }
@@ -723,6 +731,8 @@ void EntryPrintResult(void const * argument)
     // UBaseType_t hwm = uxTaskGetStackHighWaterMark(NULL);
     // int len2 = snprintf(str, sizeof(str), "[Print Task] Word Usage: %lu\r\n", 512 - hwm);
     // HAL_UART_Transmit(&huart3, (uint8_t*)str, len2, 100);
+
+    osDelay(100);
   }
   /* USER CODE END EntryPrintResult */
 }
@@ -737,7 +747,9 @@ void EntryPrintResult(void const * argument)
 void EntryGetSteerADC(void const * argument)
 {
   /* USER CODE BEGIN EntryGetSteerADC */
-  uint16_t steer_adc_value;
+  // HAL_ADC_Start_IT(&hadc1);
+
+  uint32_t steer_adc_value;
 
   /* Infinite loop */
   for(;;) {

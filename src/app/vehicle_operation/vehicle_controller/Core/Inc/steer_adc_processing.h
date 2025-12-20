@@ -7,6 +7,6 @@
 extern osSemaphoreId steer_adc_sem_handle_;
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc);
-uint16_t GetSteerADCValue(void);
+uint32_t GetSteerADCValue(void);
 
 #endif // __STEER_ADC_PROCESSING_H__
