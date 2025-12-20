@@ -10,15 +10,12 @@
 
 
 typedef struct {
-    // 1. Remote Controller Data
+    // Remote Controller Data
     RemoteSignals_t remote;
-    uint32_t last_update_remote;
 
-    // 2. Motor Status Data (Example)
+    // example: Motor Status Data
     // MotorStatus_t motor;
-    // uint32_t last_update_motor;
-
+    
 } SharedMemory_t;
-
 
 #endif // __STRUCT_SHARED_MEMORY_H__
