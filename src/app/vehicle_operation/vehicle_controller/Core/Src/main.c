@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "struct_shared_memory.h"
 #include "remote_signal_processing.h"
+#include "steer_adc_processing.h"
 
 /* USER CODE END Includes */
 
@@ -62,6 +63,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
+osThreadId TaskGetSteerADCHandle;
 /* USER CODE BEGIN PV */
 osMutexId vehicleDataMutexHandle;
 EventGroupHandle_t eventGroupHandle; // FreeRTOS Event Group
@@ -78,6 +80,7 @@ static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
 void EntryGetRemote(void const * argument);
 void EntryPrintResult(void const * argument);
+void EntryGetSteerADC(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -128,6 +131,8 @@ int main(void)
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
+
+  HAL_ADC_Start_IT(&hadc1);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -142,6 +147,10 @@ int main(void)
   // from remote_signal_processing.h
   osSemaphoreDef(remoteSigSem);
   remote_sig_sem_handle_ = osSemaphoreCreate(osSemaphore(remoteSigSem), 1);
+
+  // from steer_adc_processing.h
+  osSemaphoreDef(steerAdcSem);
+  steer_adc_sem_handle_ = osSemaphoreCreate(osSemaphore(steerAdcSem), 1);
 
   // Create Event Group
   eventGroupHandle = xEventGroupCreate();
@@ -164,6 +173,10 @@ int main(void)
   /* definition and creation of TaskPrintResult */
   osThreadDef(TaskPrintResult, EntryPrintResult, osPriorityNormal, 0, 512);
   TaskPrintResultHandle = osThreadCreate(osThread(TaskPrintResult), NULL);
+
+  /* definition and creation of TaskGetSteerADC */
+  osThreadDef(TaskGetSteerADC, EntryGetSteerADC, osPriorityNormal, 0, 128);
+  TaskGetSteerADCHandle = osThreadCreate(osThread(TaskGetSteerADC), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -706,8 +719,41 @@ void EntryPrintResult(void const * argument)
     }
     
     // if (event_bits & EVT_MOTOR_UPDATED) { ... }
+
+    // UBaseType_t hwm = uxTaskGetStackHighWaterMark(NULL);
+    // int len2 = snprintf(str, sizeof(str), "[Print Task] Word Usage: %lu\r\n", 512 - hwm);
+    // HAL_UART_Transmit(&huart3, (uint8_t*)str, len2, 100);
   }
   /* USER CODE END EntryPrintResult */
+}
+
+/* USER CODE BEGIN Header_EntryGetSteerADC */
+/**
+* @brief Function implementing the TaskGetSteerADC thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_EntryGetSteerADC */
+void EntryGetSteerADC(void const * argument)
+{
+  /* USER CODE BEGIN EntryGetSteerADC */
+  uint16_t steer_adc_value;
+
+  /* Infinite loop */
+  for(;;) {
+    steer_adc_value = GetSteerADCValue();   // This function waits for semaphore
+
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data_shm_.steer_adc = steer_adc_value;
+    osMutexRelease(vehicleDataMutexHandle);
+
+
+    if (eventGroupHandle != NULL) {
+        xEventGroupSetBits(eventGroupHandle, EVT_STEER_ADC_UPDATED);
+    }
+    osDelay(10); // Prevent CPU hogging
+  }
+  /* USER CODE END EntryGetSteerADC */
 }
 
 /**
