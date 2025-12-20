@@ -62,6 +62,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
         
         rx_sync_flags_ = 0;
         HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+        remote_signals.alive = true;
     }
 }
 
@@ -72,5 +73,10 @@ RemoteSignals_t GetRemoteSignals(void) {
     }
 
     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+    remote_signals.steering_pulse_width_us = -1;
+    remote_signals.throttle_pulse_width_us = -1;
+    remote_signals.mode_pulse_width_us = -1;
+    remote_signals.brake_pulse_width_us = -1;
+    remote_signals.alive = false;
     return remote_signals; // Should not reach here
 }
