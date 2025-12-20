@@ -60,9 +60,9 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
-osMessageQId PrintDataHandle;
 /* USER CODE BEGIN PV */
-
+osPoolId appMsgPoolHandle;
+osMessageQId PrintDataHandle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -103,7 +103,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  InitRemoteSignalTask();
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -123,6 +123,9 @@ int main(void)
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -131,28 +134,35 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
+
+  // from remote_signal_processing.h
+  osSemaphoreDef(remoteSigSem);
+  remote_sig_sem_handle_ = osSemaphoreCreate(osSemaphore(remoteSigSem), 1);
+
+
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
-  /* Create the queue(s) */
-  /* definition and creation of PrintData */
-  osMessageQDef(PrintData, 16, uint32_t);
-  PrintDataHandle = osMessageCreate(osMessageQ(PrintData), NULL);
-
   /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
+  /* Create Memory Pool */
+  osPoolDef(appMsgPool, 16, AppMessage_t);
+  appMsgPoolHandle = osPoolCreate(osPool(appMsgPool));
+
+  /* Create Queue for Pointers (AppMessage_t*) */
+  osMessageQDef(PrintData, 16, AppMessage_t*);
+  PrintDataHandle = osMessageCreate(osMessageQ(PrintData), NULL);
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
   /* definition and creation of TaskGetRemote */
-  osThreadDef(TaskGetRemote, EntryGetRemote, osPriorityNormal, 0, 128);
+  osThreadDef(TaskGetRemote, EntryGetRemote, osPriorityNormal, 0, 512);
   TaskGetRemoteHandle = osThreadCreate(osThread(TaskGetRemote), NULL);
 
   /* definition and creation of TaskPrintResult */
-  osThreadDef(TaskPrintResult, EntryPrintResult, osPriorityLow, 0, 512);
+  osThreadDef(TaskPrintResult, EntryPrintResult, osPriorityNormal, 0, 512);
   TaskPrintResultHandle = osThreadCreate(osThread(TaskPrintResult), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -639,10 +649,35 @@ void EntryGetRemote(void const * argument)
 {
   /* USER CODE BEGIN 5 */
   RemoteSignals_t remote_signals;
+  AppMessage_t *pMsg;
+
   /* Infinite loop */
   for(;;) {
-    remote_signals = GetRemoteSignals();    // semaphore wait function
-    osMessagePut(PrintDataHandle, &remote_signals, 0);
+    // remote_signals = GetRemoteSignals();    // semaphore wait function
+
+
+    /*
+    // Allocate memory block from pool
+    pMsg = (AppMessage_t*)osPoolAlloc(appMsgPoolHandle);
+    
+    if (pMsg != NULL) {
+        
+        // Prepare Message
+        pMsg->type = MSG_TYPE_REMOTE_SIGNAL;
+        pMsg->payload.remote = remote_signals;
+        
+        if (osMessagePut(PrintDataHandle, (uint32_t)pMsg, 0) != osOK) {
+            // Failed to put message: return memory block back to pool
+            osPoolFree(appMsgPoolHandle, pMsg);
+        }
+    }
+    */
+    static uint32_t prev_tick = 0;
+    uint32_t curr_tick = HAL_GetTick();
+    if (curr_tick - prev_tick >= 1000) { // 1초 경과하면 토글
+      HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+      prev_tick = curr_tick;
+    }
   }
   /* USER CODE END 5 */
 }
@@ -658,20 +693,39 @@ void EntryPrintResult(void const * argument)
 {
   /* USER CODE BEGIN EntryPrintResult */
   osEvent event;
-  RemoteSignals_t remote_signals;
+  AppMessage_t *pMsg;
+
   /* Infinite loop */
   for(;;) {
-    event = osMessageGet(PrintDataHandle, 10000);
+  
+    /*
+    event = osMessageGet(PrintDataHandle, osWaitForever); // Wait forever  
     if (event.status == osEventMessage) {
-      remote_signals = event.value.v;
-      char str[50];
-      int str_len = snprintf(str, sizeof(str), "%d us\t%d us\t%d us\t%d us\n",
-                        remote_signals.steering_pulse_width_us,
-                        remote_signals.throttle_pulse_width_us,
-                        remote_signals.mode_pulse_width_us,
-                        remote_signals.brake_pulse_width_us);
-      HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 10);
-    }
+      // Get pointer from queue
+      pMsg = (AppMessage_t*)event.value.p;
+      
+      if (pMsg != NULL) {
+          // Check Message Type
+          if (pMsg->type == MSG_TYPE_REMOTE_SIGNAL) {
+              RemoteSignals_t *sig = &pMsg->payload.remote;
+              char str[100]; // Increased buffer size just in case
+              int str_len = snprintf(str, sizeof(str), "CH1:%lu\tCH2:%lu\tCH3:%lu\tCH4:%lu\r\n",
+                                sig->steering_pulse_width_us,
+                                sig->throttle_pulse_width_us,
+                                sig->mode_pulse_width_us,
+                                sig->brake_pulse_width_us);
+              // HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 10);
+
+          }
+          // else if (pMsg->type == MSG_TYPE_MOTOR_STATUS) { ... }
+
+          // Free memory block back to pool
+          osPoolFree(appMsgPoolHandle, pMsg);
+      }
+    }*/
+
+    HAL_UART_Transmit_IT(&huart3, "Test\r\n", 6);
+    osDelay(200);
   }
   /* USER CODE END EntryPrintResult */
 }

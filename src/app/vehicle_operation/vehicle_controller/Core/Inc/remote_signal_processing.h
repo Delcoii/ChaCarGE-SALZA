@@ -20,11 +20,24 @@ typedef struct {
     uint32_t brake_pulse_width_us;
 } RemoteSignals_t;
 
+// --- Shared Memory Wrapper Structure ---
+typedef enum {
+    MSG_TYPE_REMOTE_SIGNAL,
+    // Add other types here in the future
+    // MSG_TYPE_MOTOR_STATUS,
+} MsgType_e;
+
+typedef struct {
+    MsgType_e type;
+    union {
+        RemoteSignals_t remote;
+        // MotorStatus_t   motor;
+    } payload;
+} AppMessage_t;
+
 
 extern osSemaphoreId remote_sig_sem_handle_;
 
-
-void InitRemoteSignalTask(void);
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim);
 RemoteSignals_t GetRemoteSignals(void);
 

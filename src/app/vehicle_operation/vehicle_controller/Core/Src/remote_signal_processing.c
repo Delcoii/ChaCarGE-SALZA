@@ -10,16 +10,13 @@ static volatile uint32_t ch3_rising_edge_us_ = 0;
 static volatile uint32_t ch4_rising_edge_us_ = 0;
 static volatile uint32_t current_capture_us_ = 0;
 
-void InitRemoteSignalTask(void) {
-    remote_sig_sem_handle_ = osSemaphoreCreate(osSemaphore(remoteSigSem), 1);
-}
 
 static inline uint32_t CalcPulseWidth(uint32_t rising, uint32_t falling) {
     if (falling >= rising) return falling - rising;
     else return (0xFFFFFFFF - rising) + falling;
 }
 
-
+BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
     if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
         current_capture_us_ = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
@@ -60,15 +57,17 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
     }
 
     // if every channel is received, release the semaphore
-    if (rx_sync_flags_ == RX_FLAG_ALL) {
-        osSemaphoreRelease(remote_sig_sem_handle_);
-        rx_sync_flags_ = 0;
-    }
+    // if (rx_sync_flags_ == RX_FLAG_ALL) {
+    //     xSemaphoreGiveFromISR(remote_sig_sem_handle_, &xHigherPriorityTaskWoken);
+    //     rx_sync_flags_ = 0;
+    // }
 }
 
 
 RemoteSignals_t GetRemoteSignals(void) {
-    if (osSemaphoreWait(remote_sig_sem_handle_, osWaitForever) == osOK) {
-        return remote_signals;
-    }
+    // if (xSemaphoreTakeFromISR(remote_sig_sem_handle_, &xHigherPriorityTaskWoken) == pdPASS) {
+    //     return remote_signals;
+    // }
+
+    return remote_signals; // Should not reach here
 }
