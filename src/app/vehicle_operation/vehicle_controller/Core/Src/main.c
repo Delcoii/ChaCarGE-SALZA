@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "struct_shared_memory.h"
 #include "remote_signal_processing.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -63,6 +64,7 @@ osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
 /* USER CODE BEGIN PV */
 osMutexId vehicleDataMutexHandle;
+EventGroupHandle_t eventGroupHandle; // FreeRTOS Event Group
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -104,7 +106,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -141,7 +142,10 @@ int main(void)
   // from remote_signal_processing.h
   osSemaphoreDef(remoteSigSem);
   remote_sig_sem_handle_ = osSemaphoreCreate(osSemaphore(remoteSigSem), 1);
-  
+
+  // Create Event Group
+  eventGroupHandle = xEventGroupCreate();
+
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -648,22 +652,16 @@ void EntryGetRemote(void const * argument)
 
   /* Infinite loop */
   for(;;) {
-    // 1. Wait for New Data (Event-Driven) from ISR
     remote_signals = GetRemoteSignals(); // This function waits for semaphore
 
-    // 2. Update Shared Memory (Protected by Mutex)
     osMutexWait(vehicleDataMutexHandle, osWaitForever);
-    vehicle_data_shm_.type = MSG_TYPE_REMOTE_SIGNAL;
-    vehicle_data_shm_.payload.remote = remote_signals;
+    vehicle_data_shm_.remote = remote_signals;
     osMutexRelease(vehicleDataMutexHandle);
 
-    // Toggle LED to indicate task is alive
-    static uint32_t prev_tick = 0;
-    uint32_t curr_tick = HAL_GetTick();
-    if (curr_tick - prev_tick >= 1000) { // 1Hz Toggle
-      HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-      prev_tick = curr_tick;
+    if (eventGroupHandle != NULL) {
+        xEventGroupSetBits(eventGroupHandle, EVT_REMOTE_UPDATED);
     }
+
   }
   /* USER CODE END 5 */
 }
@@ -680,33 +678,34 @@ void EntryPrintResult(void const * argument)
   /* USER CODE BEGIN EntryPrintResult */
   SharedMemory_t print_data;
   char str[100];
-  int str_len;
+  EventBits_t event_bits;
 
   /* Infinite loop */
   for(;;) {
-    // 1. Polling Period (200ms) - Controls output rate
-    osDelay(200);
+    event_bits = xEventGroupWaitBits(
+      eventGroupHandle,
+      EVT_ALL_UPDATED, // Wait for ANY bit (OR logic)
+      pdTRUE,          // Clear bits on exit (Auto-Reset)
+      pdFALSE,         // Wait for ANY bit (OR logic)
+      osWaitForever    // Block until event happens
+    );
 
-    
-    // 2. Read Shared Memory (Protected by Mutex)
+    // copy shared memory to local variable
     osMutexWait(vehicleDataMutexHandle, osWaitForever);
-    print_data = vehicle_data_shm_; // Copy Global to Local safely
+    print_data = vehicle_data_shm_;
     osMutexRelease(vehicleDataMutexHandle);
 
-    // 3. Process Data based on Type
-    switch (print_data.type) {
-        case MSG_TYPE_REMOTE_SIGNAL:
-        {
-            RemoteSignals_t *sig = &print_data.payload.remote;
-            str_len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
-                              sig->steering_pulse_width_us,
-                              sig->throttle_pulse_width_us,
-                              print_data.payload.remote.mode_pulse_width_us,
-                              print_data.payload.remote.brake_pulse_width_us);
-            HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
-            break;
-        }
+    // print remote signals
+    if (event_bits & EVT_REMOTE_UPDATED) {
+        int len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
+                          print_data.remote.steering_pulse_width_us,
+                          print_data.remote.throttle_pulse_width_us,
+                          print_data.remote.mode_pulse_width_us,
+                          print_data.remote.brake_pulse_width_us);
+        HAL_UART_Transmit(&huart3, (uint8_t*)str, len, 100);
     }
+    
+    // if (event_bits & EVT_MOTOR_UPDATED) { ... }
   }
   /* USER CODE END EntryPrintResult */
 }

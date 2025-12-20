@@ -1,46 +1,24 @@
-#ifndef __APP_MESSAGE_H__
-#define __APP_MESSAGE_H__
+#ifndef __STRUCT_SHARED_MEMORY_H__
+#define __STRUCT_SHARED_MEMORY_H__
 
-#include <stdint.h>
-#include <stdbool.h>
-#include "cmsis_os.h"
+#include "remote_signal_processing.h"
 
-// Message Type Definition
-typedef enum {
-    MSG_TYPE_REMOTE_SIGNAL,
-    MSG_TYPE_MOTOR_STATUS,
-    // Add other types here
-} MsgType_e;
+// --- Event Group Flags ---
+#define EVT_REMOTE_UPDATED (1 << 0) // 0x01
+#define EVT_MOTOR_UPDATED  (1 << 1) // 0x02
+#define EVT_ALL_UPDATED    (EVT_REMOTE_UPDATED | EVT_MOTOR_UPDATED)
 
 
-// Remote Control Data
 typedef struct {
-    uint32_t steering_pulse_width_us;
-    uint32_t throttle_pulse_width_us;
-    uint32_t mode_pulse_width_us;
-    uint32_t brake_pulse_width_us;
-    bool alive;
-} RemoteSignals_t;
+    // 1. Remote Controller Data
+    RemoteSignals_t remote;
+    uint32_t last_update_remote;
 
-// Motor Status Data (Example)
-typedef struct {
-    float current_speed;
-    float current_steering_angle;
-    uint8_t error_code;
-} MotorStatus_t;
+    // 2. Motor Status Data (Example)
+    // MotorStatus_t motor;
+    // uint32_t last_update_motor;
 
-
-
-// Shared Memory Wrapper Structure
-typedef struct {
-    MsgType_e type;
-    union {
-        RemoteSignals_t remote;
-        MotorStatus_t   motor;
-        // Add other payload structures here
-    } payload;
 } SharedMemory_t;
 
 
-
-#endif // __APP_MESSAGE_H__
+#endif // __STRUCT_SHARED_MEMORY_H__
