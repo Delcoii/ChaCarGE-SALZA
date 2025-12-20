@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include "cmsis_os.h"
 
-// --- Message Type Definition ---
+// Message Type Definition
 typedef enum {
     MSG_TYPE_REMOTE_SIGNAL,
     MSG_TYPE_MOTOR_STATUS,
@@ -13,7 +13,7 @@ typedef enum {
 } MsgType_e;
 
 
-// --- Remote Control Data ---
+// Remote Control Data
 typedef struct {
     uint32_t steering_pulse_width_us;
     uint32_t throttle_pulse_width_us;
@@ -22,7 +22,7 @@ typedef struct {
     bool alive;
 } RemoteSignals_t;
 
-// --- Motor Status Data (Example) ---
+// Motor Status Data (Example)
 typedef struct {
     float current_speed;
     float current_steering_angle;
@@ -30,7 +30,8 @@ typedef struct {
 } MotorStatus_t;
 
 
-// --- Shared Memory Wrapper Structure ---
+
+// Shared Memory Wrapper Structure
 typedef struct {
     MsgType_e type;
     union {
@@ -38,7 +39,7 @@ typedef struct {
         MotorStatus_t   motor;
         // Add other payload structures here
     } payload;
-} AppMessage_t;
+} SharedMemory_t;
 
 
 

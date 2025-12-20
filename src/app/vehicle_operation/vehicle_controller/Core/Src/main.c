@@ -23,8 +23,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "struct_shared_memory.h"
 #include "remote_signal_processing.h"
-#include "app_message.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,7 +62,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
 /* USER CODE BEGIN PV */
-osMutexId appDataMutexHandle;
+osMutexId vehicleDataMutexHandle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -84,7 +84,7 @@ void EntryPrintResult(void const * argument);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 // Shared Memory
-AppMessage_t g_SystemState;
+SharedMemory_t vehicle_data_shm_;
 /* USER CODE END 0 */
 
 /**
@@ -131,8 +131,8 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
-  osMutexDef(appDataMutex);
-  appDataMutexHandle = osMutexCreate(osMutex(appDataMutex));
+  osMutexDef(vehicleDataMutex);
+  vehicleDataMutexHandle = osMutexCreate(osMutex(vehicleDataMutex));
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -652,13 +652,10 @@ void EntryGetRemote(void const * argument)
     remote_signals = GetRemoteSignals(); // This function waits for semaphore
 
     // 2. Update Shared Memory (Protected by Mutex)
-    osMutexWait(appDataMutexHandle, osWaitForever);
-    
-    // Set type and copy data to global shared memory
-    g_SystemState.type = MSG_TYPE_REMOTE_SIGNAL;
-    g_SystemState.payload.remote = remote_signals;
-    
-    osMutexRelease(appDataMutexHandle);
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data_shm_.type = MSG_TYPE_REMOTE_SIGNAL;
+    vehicle_data_shm_.payload.remote = remote_signals;
+    osMutexRelease(vehicleDataMutexHandle);
 
     // Toggle LED to indicate task is alive
     static uint32_t prev_tick = 0;
@@ -681,7 +678,7 @@ void EntryGetRemote(void const * argument)
 void EntryPrintResult(void const * argument)
 {
   /* USER CODE BEGIN EntryPrintResult */
-  AppMessage_t current_state;
+  SharedMemory_t print_data;
   char str[100];
   int str_len;
 
@@ -692,26 +689,24 @@ void EntryPrintResult(void const * argument)
 
     
     // 2. Read Shared Memory (Protected by Mutex)
-    osMutexWait(appDataMutexHandle, osWaitForever);
-    current_state = g_SystemState; // Copy Global to Local safely
-    osMutexRelease(appDataMutexHandle);
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    print_data = vehicle_data_shm_; // Copy Global to Local safely
+    osMutexRelease(vehicleDataMutexHandle);
 
     // 3. Process Data based on Type
-    switch (current_state.type) {
+    switch (print_data.type) {
         case MSG_TYPE_REMOTE_SIGNAL:
         {
-            RemoteSignals_t *sig = &current_state.payload.remote;
+            RemoteSignals_t *sig = &print_data.payload.remote;
             str_len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
                               sig->steering_pulse_width_us,
                               sig->throttle_pulse_width_us,
-                              sig->mode_pulse_width_us,
-                              sig->brake_pulse_width_us);
+                              print_data.payload.remote.mode_pulse_width_us,
+                              print_data.payload.remote.brake_pulse_width_us);
             HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
             break;
         }
-        // case MSG_TYPE_MOTOR_STATUS: ...
     }
-    
   }
   /* USER CODE END EntryPrintResult */
 }

@@ -4,7 +4,7 @@
 
 #include "main.h"
 #include "cmsis_os.h"
-#include "app_message.h" 
+#include "struct_shared_memory.h" 
 
 // bit flag for checking all channel received
 #define RX_FLAG_CH1  (1 << 0) // 0x01
@@ -15,6 +15,7 @@
 
 
 extern osSemaphoreId remote_sig_sem_handle_;
+
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim);
 RemoteSignals_t GetRemoteSignals(void);
