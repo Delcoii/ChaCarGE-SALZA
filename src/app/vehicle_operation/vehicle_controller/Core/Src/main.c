@@ -158,7 +158,7 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of TaskGetRemote */
-  osThreadDef(TaskGetRemote, EntryGetRemote, osPriorityNormal, 0, 512);
+  osThreadDef(TaskGetRemote, EntryGetRemote, osPriorityNormal, 0, 128);
   TaskGetRemoteHandle = osThreadCreate(osThread(TaskGetRemote), NULL);
 
   /* definition and creation of TaskPrintResult */
