@@ -23,7 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "remote_signal_processing.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,7 +58,7 @@ UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
-osThreadId TaskRemotePulseHandle;
+osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
 /* USER CODE BEGIN PV */
 
@@ -73,8 +73,8 @@ static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
-void GetRemotePulse(void const * argument);
-void PrintResultSerial(void const * argument);
+void EntryGetRemote(void const * argument);
+void EntryPrintResult(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -102,7 +102,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  InitRemoteSignalTask();
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -145,12 +145,12 @@ int main(void)
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of TaskRemotePulse */
-  osThreadDef(TaskRemotePulse, GetRemotePulse, osPriorityNormal, 0, 128);
-  TaskRemotePulseHandle = osThreadCreate(osThread(TaskRemotePulse), NULL);
+  /* definition and creation of TaskGetRemote */
+  osThreadDef(TaskGetRemote, EntryGetRemote, osPriorityNormal, 0, 128);
+  TaskGetRemoteHandle = osThreadCreate(osThread(TaskGetRemote), NULL);
 
   /* definition and creation of TaskPrintResult */
-  osThreadDef(TaskPrintResult, PrintResultSerial, osPriorityLow, 0, 512);
+  osThreadDef(TaskPrintResult, EntryPrintResult, osPriorityLow, 0, 512);
   TaskPrintResultHandle = osThreadCreate(osThread(TaskPrintResult), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -628,117 +628,44 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-  if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
-  {
-    uint32_t currentCapture = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-    
-    // Check pin state to determine edge type (TIM2 CH1 is usually PA5)
-    // High state means we just had a Rising Edge (if polarity logic is standard)
-    // BUT in BothEdge mode, we are checking the state AFTER the edge.
-    // If we just had a Rising edge, pin should be HIGH.
-    // If we just had a Falling edge, pin should be LOW.
-    
-    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET) 
-    {
-      // Rising Edge: Start measurement
-      icValue1 = currentCapture;
-    }
-    else 
-    {
-      // Falling Edge: End measurement (High Pulse Width)
-      icValue2 = currentCapture;
 
-      if (icValue2 >= icValue1)
-      {
-        diffCapture = icValue2 - icValue1;
-      }
-      else
-      {
-        // Handle timer overflow
-        diffCapture = (0xFFFFFFFF - icValue1) + icValue2;
-      }
-      
-      // Send Pulse Width (in microseconds if 1MHz timer)
-      osSemaphoreRelease(inputCaptureSemHandle);
-    }
-  }
-}
-
-void StartInputCaptureTask(void const * argument)
-{
-  /* USER CODE BEGIN StartInputCaptureTask */
-  /* Infinite loop */
-  for(;;)
-  {
-    // Wait for the semaphore (signal from ISR)
-    if (osSemaphoreWait(inputCaptureSemHandle, osWaitForever) == osOK)
-    {
-      // diffCapture is now the Pulse Width in microseconds
-      // Send width to Queue with 0 timeout (don't block if queue is full)
-      osMessagePut(inputCaptureQueueHandle, diffCapture, 0);
-    }
-  }
-  /* USER CODE END StartInputCaptureTask */
-}
-
-/* USER CODE BEGIN StartSerialTask */
-void StartSerialTask(void const * argument)
-{
-  osEvent event;
-  char buffer[50];
-
-  for(;;)
-  {
-    // Wait for data from Queue (timeout 1000ms)
-    event = osMessageGet(inputCaptureQueueHandle, 1000);
-
-    if (event.status == osEventMessage)
-    {
-      uint32_t width = event.value.v;
-      int len = sprintf(buffer, "Width: %lu us\r\n", width);
-      HAL_UART_Transmit(&huart3, (uint8_t*)buffer, len, 100);
-    }
-  }
-}
-/* USER CODE END StartSerialTask */
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_GetRemotePulse */
+
+/* USER CODE BEGIN Header_EntryGetRemote */
 /**
-  * @brief  Function implementing the TaskRemotePulse thread.
+  * @brief  Function implementing the TaskGetRemote thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_GetRemotePulse */
-void GetRemotePulse(void const * argument)
+/* USER CODE END Header_EntryGetRemote */
+void EntryGetRemote(void const * argument)
 {
   /* USER CODE BEGIN 5 */
+  RemoteSignals_t remote_signals;
   /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
+  for(;;) {
+    remote_signals = GetRemoteSignals();    // semaphore wait function
   }
   /* USER CODE END 5 */
 }
 
-/* USER CODE BEGIN Header_PrintResultSerial */
+/* USER CODE BEGIN Header_EntryPrintResult */
 /**
 * @brief Function implementing the TaskPrintResult thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_PrintResultSerial */
-void PrintResultSerial(void const * argument)
+/* USER CODE END Header_EntryPrintResult */
+void EntryPrintResult(void const * argument)
 {
-  /* USER CODE BEGIN PrintResultSerial */
+  /* USER CODE BEGIN EntryPrintResult */
   /* Infinite loop */
   for(;;)
   {
     osDelay(1);
   }
-  /* USER CODE END PrintResultSerial */
+  /* USER CODE END EntryPrintResult */
 }
 
 /**

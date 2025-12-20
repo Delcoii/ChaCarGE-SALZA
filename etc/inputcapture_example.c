@@ -461,7 +461,7 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
   // sConfigIC.ICFilter = 0;
-  sConfigIC.ICFilter = 5;
+  sConfigIC.ICFilter = 15;
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
@@ -705,7 +705,7 @@ void StartSerialTask(void const * argument)
     {
       uint32_t width = event.value.v;
       int len = sprintf(buffer, "Width: %lu us\r\n", width);
-      HAL_UART_Transmit(&huart3, (uint8_t*)buffer, len, 100);
+      HAL_UART_Transmit(&huart3, (uint8_t*)buffer, len, 10);
     }
   }
 }
