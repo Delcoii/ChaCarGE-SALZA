@@ -1,12 +1,10 @@
 #ifndef __REMOTE_SIGNAL_PROCESSING_H__
 #define __REMOTE_SIGNAL_PROCESSING_H__
 
-#include <stdbool.h>
 
 #include "main.h"
 #include "cmsis_os.h"
-
-
+#include "app_message.h" // Include the new message header
 
 // bit flag for checking all channel received
 #define RX_FLAG_CH1  (1 << 0) // 0x01
@@ -16,28 +14,8 @@
 #define RX_FLAG_ALL  (0x0F)   // all channel received
 
 
-typedef struct {
-    uint32_t steering_pulse_width_us;
-    uint32_t throttle_pulse_width_us;
-    uint32_t mode_pulse_width_us;
-    uint32_t brake_pulse_width_us;
-    bool alive = false;
-} RemoteSignals_t;
 
-// --- Shared Memory Wrapper Structure ---
-typedef enum {
-    MSG_TYPE_REMOTE_SIGNAL,
-    // Add other types here in the future
-    // MSG_TYPE_MOTOR_STATUS,
-} MsgType_e;
 
-typedef struct {
-    MsgType_e type;
-    union {
-        RemoteSignals_t remote;
-        // MotorStatus_t   motor;
-    } payload;
-} AppMessage_t;
 
 
 extern osSemaphoreId remote_sig_sem_handle_;

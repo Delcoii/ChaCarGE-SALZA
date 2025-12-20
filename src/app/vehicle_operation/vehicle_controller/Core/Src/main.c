@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "remote_signal_processing.h"
+#include "app_message.h" // Include AppMessage definitions
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -655,26 +656,24 @@ void EntryGetRemote(void const * argument)
   for(;;) {
     remote_signals = GetRemoteSignals();    // semaphore wait function
 
-
-
     // Allocate memory block from pool
     pMsg = (AppMessage_t*)osPoolAlloc(appMsgPoolHandle);
     
     if (pMsg != NULL) {
-        
-        // Prepare Message
+        // Prepare Message FIRST
         pMsg->type = MSG_TYPE_REMOTE_SIGNAL;
         pMsg->payload.remote = remote_signals;
         
+        // THEN put into queue
         if (osMessagePut(PrintDataHandle, (uint32_t)pMsg, 0) != osOK) {
-            // Failed to put message: return memory block back to pool
+            // Failed to put message (Queue Full): return memory block back to pool
             osPoolFree(appMsgPoolHandle, pMsg);
         }
     }
-
+    
     static uint32_t prev_tick = 0;
     uint32_t curr_tick = HAL_GetTick();
-    if (curr_tick - prev_tick >= 1000) { // 1초 경과하면 토글
+    if (curr_tick - prev_tick >= 1000) { 
       HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
       prev_tick = curr_tick;
     }
@@ -697,8 +696,8 @@ void EntryPrintResult(void const * argument)
 
   /* Infinite loop */
   for(;;) {
-  
     event = osMessageGet(PrintDataHandle, osWaitForever); // Wait forever  
+    
     if (event.status == osEventMessage) {
       // Get pointer from queue
       pMsg = (AppMessage_t*)event.value.p;
@@ -714,7 +713,6 @@ void EntryPrintResult(void const * argument)
                                 sig->mode_pulse_width_us,
                                 sig->brake_pulse_width_us);
               HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 10);
-
           }
           // else if (pMsg->type == MSG_TYPE_MOTOR_STATUS) { ... }
 
@@ -722,12 +720,10 @@ void EntryPrintResult(void const * argument)
           osPoolFree(appMsgPoolHandle, pMsg);
       }
     }
-
-    /*
-    char test_str[] = "Test\r\n";
-    HAL_UART_Transmit(&huart3, (uint8_t*)test_str, strlen(test_str), 10);
-    osDelay(200);
-    */
+    
+    // Optional delay to throttle output if needed, but not strictly necessary 
+    // if EntryGetRemote is producing data at a reasonable rate.
+    // osDelay(200); 
   }
   /* USER CODE END EntryPrintResult */
 }
