@@ -26,6 +26,7 @@ double LinearMapping(double x, double in_min, double in_max, double out_min, dou
 
 
 void StopMotor(void) {
+    // IN1 & IN2 Reset
     HAL_GPIO_WritePin(LEFT_IN1_GPIO_Port, LEFT_IN1_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(LEFT_IN2_GPIO_Port, LEFT_IN2_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(RIGHT_IN1_GPIO_Port, RIGHT_IN1_Pin, GPIO_PIN_RESET);
@@ -33,5 +34,16 @@ void StopMotor(void) {
     HAL_GPIO_WritePin(STEER_IN1_GPIO_Port, STEER_IN1_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(STEER_IN2_GPIO_Port, STEER_IN2_Pin, GPIO_PIN_RESET);
 
+    // PWM Duty Reset
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+}
+
+void MoveForward(uint32_t remote_ch2_width_us) {
+    HAL_GPIO_WritePin(LEFT_IN1_GPIO_Port, LEFT_IN1_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LEFT_IN2_GPIO_Port, LEFT_IN2_Pin, GPIO_PIN_RESET);
+
+    
 }
 

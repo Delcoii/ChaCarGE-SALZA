@@ -784,6 +784,12 @@ void EntryGetSteerADC(void const * argument)
 void EntryVehicleControl(void const * argument)
 {
   /* USER CODE BEGIN EntryVehicleControl */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+  
+  uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);      // arr is fixed value
+
   SharedMemory_t vehicle_data;
 
   /* Infinite loop */
