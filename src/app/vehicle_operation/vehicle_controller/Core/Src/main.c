@@ -784,10 +784,19 @@ void EntryGetSteerADC(void const * argument)
 void EntryVehicleControl(void const * argument)
 {
   /* USER CODE BEGIN EntryVehicleControl */
+  SharedMemory_t vehicle_data;
+
   /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
+  for(;;) {
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data = vehicle_data_shm_;
+    osMutexRelease(vehicleDataMutexHandle);
+
+    
+
+
+
+    osDelay(10);   // 100 Hz
   }
   /* USER CODE END EntryVehicleControl */
 }
