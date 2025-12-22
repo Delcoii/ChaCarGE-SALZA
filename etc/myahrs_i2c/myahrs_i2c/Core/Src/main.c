@@ -67,11 +67,21 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 #define REG_GYRO_LOW    0x26
 #define REG_ROLL_LOW    0x50
 
+// Scale Factors
+#define ACC_SCALE       (16.0f / 32768.0f)
+#define GYRO_SCALE      (2000.0f / 32768.0f)
+#define RPY_SCALE       (180.0f / 32768.0f)
+
 uint8_t i2c_buf[6];
 int16_t roll, pitch, yaw;
 int16_t acc_x, acc_y, acc_z;
 int16_t gyro_x, gyro_y, gyro_z;
-char uart_buf[200];
+
+float roll_f, pitch_f, yaw_f;
+float acc_xf, acc_yf, acc_zf;
+float gyro_xf, gyro_yf, gyro_zf;
+
+char uart_buf[256];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -169,10 +179,24 @@ int main(void)
         gyro_z = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
     }
 
-    // Print All
+    // Convert to float
+    roll_f  = roll  * RPY_SCALE;
+    pitch_f = pitch * RPY_SCALE;
+    yaw_f   = yaw   * RPY_SCALE;
+
+    acc_xf = acc_x * ACC_SCALE;
+    acc_yf = acc_y * ACC_SCALE;
+    acc_zf = acc_z * ACC_SCALE;
+
+    gyro_xf = gyro_x * GYRO_SCALE;
+    gyro_yf = gyro_y * GYRO_SCALE;
+    gyro_zf = gyro_z * GYRO_SCALE;
+
+    // Print All (Float)
+    // Note: Enable float printf support in MCU settings if needed (-u _printf_float)
     int len = snprintf(uart_buf, sizeof(uart_buf), 
-        "RPY:%d,%d,%d A:%d,%d,%d G:%d,%d,%d\r\n", 
-        roll, pitch, yaw, acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z);
+        "RPY:%.2f,%.2f,%.2f A:%.3f,%.3f,%.3f G:%.1f,%.1f,%.1f\r\n", 
+        roll_f, pitch_f, yaw_f, acc_xf, acc_yf, acc_zf, gyro_xf, gyro_yf, gyro_zf);
     HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);
 
     HAL_Delay(100);
