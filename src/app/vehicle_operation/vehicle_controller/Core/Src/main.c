@@ -64,6 +64,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
 osThreadId TaskGetSteerADCHandle;
+osThreadId TaskVehicleContHandle;
 /* USER CODE BEGIN PV */
 osMutexId vehicleDataMutexHandle;
 EventGroupHandle_t eventGroupHandle; // FreeRTOS Event Group
@@ -81,6 +82,7 @@ static void MX_ADC1_Init(void);
 void EntryGetRemote(void const * argument);
 void EntryPrintResult(void const * argument);
 void EntryGetSteerADC(void const * argument);
+void EntryVehicleControl(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -174,6 +176,10 @@ int main(void)
   /* definition and creation of TaskGetSteerADC */
   osThreadDef(TaskGetSteerADC, EntryGetSteerADC, osPriorityNormal, 0, 128);
   TaskGetSteerADCHandle = osThreadCreate(osThread(TaskGetSteerADC), NULL);
+
+  /* definition and creation of TaskVehicleCont */
+  osThreadDef(TaskVehicleCont, EntryVehicleControl, osPriorityNormal, 0, 128);
+  TaskVehicleContHandle = osThreadCreate(osThread(TaskVehicleCont), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -766,6 +772,24 @@ void EntryGetSteerADC(void const * argument)
     osDelay(10); // Prevent CPU hogging
   }
   /* USER CODE END EntryGetSteerADC */
+}
+
+/* USER CODE BEGIN Header_EntryVehicleControl */
+/**
+* @brief Function implementing the TaskVehicleCont thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_EntryVehicleControl */
+void EntryVehicleControl(void const * argument)
+{
+  /* USER CODE BEGIN EntryVehicleControl */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END EntryVehicleControl */
 }
 
 /**
