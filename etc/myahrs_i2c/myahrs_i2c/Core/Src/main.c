@@ -63,9 +63,11 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 /* USER CODE BEGIN PV */
 #define MYAHRS_I2C_ADDR (0x20 << 1)
 #define REG_WHO_AM_I    0x01
-#define REG_ACC_LOW     0x20
-#define REG_GYRO_LOW    0x26
-#define REG_ROLL_LOW    0x50
+// #define REG_ACC_LOW     0x20
+
+#define REG_C_ACC_X_LOW     0x22  // Calibrated Accelerometer X Low
+#define REG_C_GYRO_X_LOW    0x28  // Calibrated Gyroscope X Low
+#define REG_ROLL_LOW        0x36  // Roll Low Register Addr
 
 // Scale Factors
 #define ACC_SCALE       (16.0f / 32768.0f)
@@ -166,14 +168,14 @@ int main(void)
     }
 
     // 2. Read Accelerometer
-    if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_ACC_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
+    if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_C_ACC_X_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
         acc_x = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
         acc_y = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
         acc_z = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
     }
 
     // 3. Read Gyroscope
-    if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_GYRO_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
+    if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_C_GYRO_X_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
         gyro_x = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
         gyro_y = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
         gyro_z = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
@@ -199,7 +201,7 @@ int main(void)
         roll_f, pitch_f, yaw_f, acc_xf, acc_yf, acc_zf, gyro_xf, gyro_yf, gyro_zf);
     HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);
 
-    HAL_Delay(100);
+    HAL_Delay(50);
   }
   /* USER CODE END 3 */
 }
