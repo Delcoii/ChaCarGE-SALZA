@@ -63,11 +63,15 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 /* USER CODE BEGIN PV */
 #define MYAHRS_I2C_ADDR (0x20 << 1)
 #define REG_WHO_AM_I    0x01
+#define REG_ACC_LOW     0x20
+#define REG_GYRO_LOW    0x26
 #define REG_ROLL_LOW    0x50
 
 uint8_t i2c_buf[6];
 int16_t roll, pitch, yaw;
-char uart_buf[100];
+int16_t acc_x, acc_y, acc_z;
+int16_t gyro_x, gyro_y, gyro_z;
+char uart_buf[200];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -144,18 +148,33 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    // 1. Read Euler Angle
     if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_ROLL_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
-        // Little Endian
         roll  = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
         pitch = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
         yaw   = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
-
-        // Raw Data Print
-        int len = snprintf(uart_buf, sizeof(uart_buf), "R: %d, P: %d, Y: %d\r\n", roll, pitch, yaw);
-        HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);
-    } else {
-        HAL_UART_Transmit(&huart3, (uint8_t*)"I2C Error\r\n", 11, 100);
     }
+
+    // 2. Read Accelerometer
+    if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_ACC_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
+        acc_x = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
+        acc_y = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
+        acc_z = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
+    }
+
+    // 3. Read Gyroscope
+    if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_GYRO_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
+        gyro_x = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
+        gyro_y = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
+        gyro_z = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
+    }
+
+    // Print All
+    int len = snprintf(uart_buf, sizeof(uart_buf), 
+        "RPY:%d,%d,%d A:%d,%d,%d G:%d,%d,%d\r\n", 
+        roll, pitch, yaw, acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z);
+    HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);
+
     HAL_Delay(100);
   }
   /* USER CODE END 3 */
