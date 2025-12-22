@@ -19,12 +19,12 @@ private:
     UserData(const UserData&) = delete;
     UserData& operator=(const UserData&) = delete;
 private:
-    uint16_t userScore;
+    uint16_t userTotalScore;
     uint8_t curScores[static_cast<uint8_t>(ScoreType::MAX_SCORE_TYPES)];
 public:
     static UserData& getInstance();
     bool loadFromJsonFile(const std::string& path);
-    uint16_t getUserScore();
+    uint16_t getUserTotalScore();
     uint8_t getCurScore(ScoreType type);
 };
     

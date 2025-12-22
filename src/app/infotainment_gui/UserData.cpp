@@ -5,7 +5,7 @@
 #include <limits>
 #include <nlohmann/json.hpp>
 
-UserData::UserData() : userScore(0) {
+UserData::UserData() : userTotalScore(0) {
     for (auto& score : curScores) {
         score = 0;
     }
@@ -16,8 +16,8 @@ UserData& UserData::getInstance() {
     return instance;
 }
 
-uint16_t UserData::getUserScore() {
-    return userScore;
+uint16_t UserData::getUserTotalScore() {
+    return userTotalScore;
 }
 
 uint8_t UserData::getCurScore(ScoreType type) {
@@ -92,7 +92,7 @@ bool UserData::loadFromJsonFile(const std::string& path)
     // 예: userScore가 curScores 합과 일치해야 한다 등
 
     // 5) apply (성공했을 때만 실제 멤버 갱신)
-    userScore = newUserScore;
+    userTotalScore = newUserScore;
     for (size_t i = 0; i < kScoreCount; ++i) {
         curScores[i] = newCurScores[i];
     }

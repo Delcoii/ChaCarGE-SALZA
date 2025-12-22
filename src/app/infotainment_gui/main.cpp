@@ -1,5 +1,7 @@
 #include "main.h"
 #include "UserData.h"
+#include "ImageData.h"
+#include "BaseData.h"
 
 int main() {
     // 1. Get User Data
@@ -10,9 +12,12 @@ int main() {
     }
 
     // 2. Shared Memory
-    // 3. BasaData Instance
-    
-    // 4. ImageData Instance
+    // 3. ImageData Instance
+    ImageData& imageData = ImageData::getInstance();
+
+    // 4. BaseData Instance
+    BaseData& baseData = BaseData::getInstance();
+
 
     // Create BaseData Thread
     // Create ComposeDisplay Thread
