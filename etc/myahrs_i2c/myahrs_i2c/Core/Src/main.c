@@ -84,6 +84,17 @@ float acc_xf, acc_yf, acc_zf;
 float gyro_xf, gyro_yf, gyro_zf;
 
 char uart_buf[256];
+
+// I2C State Machine
+typedef enum {
+    I2C_IDLE,
+    I2C_READ_RPY,
+    I2C_READ_ACC,
+    I2C_READ_GYRO
+} I2C_State;
+
+volatile I2C_State i2c_state = I2C_IDLE;
+uint32_t last_tick = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -160,48 +171,34 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // 1. Read Euler Angle
-    if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_ROLL_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
-        roll  = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
-        pitch = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
-        yaw   = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
+
+    if (i2c_state == I2C_IDLE) {
+      
+      roll_f  = roll  * RPY_SCALE;
+      pitch_f = pitch * RPY_SCALE;
+      yaw_f   = yaw   * RPY_SCALE;
+
+      acc_xf = acc_x * ACC_SCALE;
+      acc_yf = acc_y * ACC_SCALE;
+      acc_zf = acc_z * ACC_SCALE;
+
+      gyro_xf = gyro_x * GYRO_SCALE;
+      gyro_yf = gyro_y * GYRO_SCALE;
+      gyro_zf = gyro_z * GYRO_SCALE;
+
+      i2c_state = I2C_READ_RPY;
+      HAL_I2C_Mem_Read_IT(&hi2c1, MYAHRS_I2C_ADDR, REG_ROLL_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6);
     }
 
-    // 2. Read Accelerometer
-    if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_C_ACC_X_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
-        acc_x = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
-        acc_y = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
-        acc_z = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
+
+    if (HAL_GetTick() - last_tick >= 50) {
+      last_tick = HAL_GetTick();
+      
+      int len = snprintf(uart_buf, sizeof(uart_buf), 
+            "RPY(deg):%.2f,%.2f,%.2f A(g):%.3f,%.3f,%.3f G(dps):%.1f,%.1f,%.1f\r\n", 
+             roll_f, pitch_f, yaw_f, acc_xf, acc_yf, acc_zf, gyro_xf, gyro_yf, gyro_zf);
+      HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);      
     }
-
-    // 3. Read Gyroscope
-    if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_C_GYRO_X_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6, 100) == HAL_OK) {
-        gyro_x = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
-        gyro_y = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
-        gyro_z = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
-    }
-
-    // Convert to float
-    roll_f  = roll  * RPY_SCALE;
-    pitch_f = pitch * RPY_SCALE;
-    yaw_f   = yaw   * RPY_SCALE;
-
-    acc_xf = acc_x * ACC_SCALE;
-    acc_yf = acc_y * ACC_SCALE;
-    acc_zf = acc_z * ACC_SCALE;
-
-    gyro_xf = gyro_x * GYRO_SCALE;
-    gyro_yf = gyro_y * GYRO_SCALE;
-    gyro_zf = gyro_z * GYRO_SCALE;
-
-    // Print All (Float)
-    // Note: Enable float printf support in MCU settings if needed (-u _printf_float)
-    int len = snprintf(uart_buf, sizeof(uart_buf), 
-        "RPY:%.2f,%.2f,%.2f A:%.3f,%.3f,%.3f G:%.1f,%.1f,%.1f\r\n", 
-        roll_f, pitch_f, yaw_f, acc_xf, acc_yf, acc_zf, gyro_xf, gyro_yf, gyro_zf);
-    HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);
-
-    HAL_Delay(50);
   }
   /* USER CODE END 3 */
 }
@@ -704,7 +701,40 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+    if (hi2c->Instance != I2C1) return;
 
+    if (i2c_state == I2C_READ_RPY) {
+        // RPY 데이터 저장
+        roll  = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
+        pitch = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
+        yaw   = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
+
+        // 다음 단계: Accel 읽기
+        i2c_state = I2C_READ_ACC;
+        HAL_I2C_Mem_Read_IT(&hi2c1, MYAHRS_I2C_ADDR, REG_C_ACC_X_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6);
+    }
+    else if (i2c_state == I2C_READ_ACC) {
+        // Accel 데이터 저장
+        acc_x = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
+        acc_y = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
+        acc_z = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
+
+        // 다음 단계: Gyro 읽기
+        i2c_state = I2C_READ_GYRO;
+        HAL_I2C_Mem_Read_IT(&hi2c1, MYAHRS_I2C_ADDR, REG_C_GYRO_X_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6);
+    }
+    else if (i2c_state == I2C_READ_GYRO) {
+        // Gyro 데이터 저장
+        gyro_x = (int16_t)((i2c_buf[1] << 8) | i2c_buf[0]);
+        gyro_y = (int16_t)((i2c_buf[3] << 8) | i2c_buf[2]);
+        gyro_z = (int16_t)((i2c_buf[5] << 8) | i2c_buf[4]);
+
+        // 모든 읽기 완료 -> 변환 및 출력
+        i2c_state = I2C_IDLE; // 다시 대기 상태로
+    }
+}
 /* USER CODE END 4 */
 
 /**
