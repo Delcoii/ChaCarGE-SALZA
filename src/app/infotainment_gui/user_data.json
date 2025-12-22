@@ -1,0 +1,9 @@
+{
+  "userScore": 120,
+  "curScores": {
+    "SPEED_BUMPS": 3,
+    "RAPID_ACCELERATIONS": 5,
+    "SHARP_TURNS": 2,
+    "SIGNAL_VIOLATIONS": 1
+  }
+}
