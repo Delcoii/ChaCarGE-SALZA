@@ -7,7 +7,7 @@
 #include "shm_functions.h"
 
 // Initialize shared memory and return pointer to ShmIntegrated structure
-struct ShmIntegrated* init_shared_memory(void)
+ShmIntegrated* init_shared_memory(void)
 {
     // 1. create shared memory object
     int shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
@@ -27,7 +27,7 @@ struct ShmIntegrated* init_shared_memory(void)
     
 
     // 3. mapping shared memory
-    struct ShmIntegrated* p_shm = mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    ShmIntegrated* p_shm = (ShmIntegrated*)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (p_shm == MAP_FAILED)
     {   // error handling
         perror("[init_shm] mmap failed");
@@ -39,7 +39,7 @@ struct ShmIntegrated* init_shared_memory(void)
     return p_shm;
 }
 
-void detach_shared_memory(struct ShmIntegrated* p_shm)
+void detach_shared_memory(ShmIntegrated* p_shm)
 {
     // 1. invalid test
     if (p_shm == NULL || p_shm == (void*)MAP_FAILED)
