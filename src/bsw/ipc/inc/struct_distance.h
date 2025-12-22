@@ -1,8 +1,12 @@
-#pragma once
+#ifndef STRUCT_DISTANCE_H
+#define STRUCT_DISTANCE_H
+
 #include <stdint.h>
 
-#define MQ_NAME "/drive_distance"
+#define MQ_DRIVE_KM_NAME "/drive_distance"
 
 typedef struct {
-    double drive_distance_km;
+    double data_km;
 } DriveDistance;
+
+#endif // STRUCT_DISTANCE_H
