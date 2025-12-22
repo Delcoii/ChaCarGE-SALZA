@@ -71,8 +71,12 @@ void Error_Handler(void);
 #define RMII_REF_CLK_GPIO_Port GPIOA
 #define RMII_MDIO_Pin GPIO_PIN_2
 #define RMII_MDIO_GPIO_Port GPIOA
+#define TIM2_CH4_Pin GPIO_PIN_3
+#define TIM2_CH4_GPIO_Port GPIOA
 #define STEER_ADC_Pin GPIO_PIN_4
 #define STEER_ADC_GPIO_Port GPIOA
+#define TIM2_CH1_Pin GPIO_PIN_5
+#define TIM2_CH1_GPIO_Port GPIOA
 #define RMII_CRS_DV_Pin GPIO_PIN_7
 #define RMII_CRS_DV_GPIO_Port GPIOA
 #define RMII_RXD0_Pin GPIO_PIN_4
@@ -89,6 +93,8 @@ void Error_Handler(void);
 #define STEER_IN2_GPIO_Port GPIOF
 #define RIGHT_IN1_Pin GPIO_PIN_15
 #define RIGHT_IN1_GPIO_Port GPIOF
+#define TIM2_CH3_Pin GPIO_PIN_10
+#define TIM2_CH3_GPIO_Port GPIOB
 #define RMII_TXD1_Pin GPIO_PIN_13
 #define RMII_TXD1_GPIO_Port GPIOB
 #define LD3_Pin GPIO_PIN_14
@@ -121,6 +127,8 @@ void Error_Handler(void);
 #define RMII_TX_EN_GPIO_Port GPIOG
 #define RMII_TXD0_Pin GPIO_PIN_13
 #define RMII_TXD0_GPIO_Port GPIOG
+#define TIM2_CH2_Pin GPIO_PIN_3
+#define TIM2_CH2_GPIO_Port GPIOB
 #define LD2_Pin GPIO_PIN_7
 #define LD2_GPIO_Port GPIOB
 

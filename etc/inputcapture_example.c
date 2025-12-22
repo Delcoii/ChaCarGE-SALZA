@@ -23,9 +23,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "struct_shared_memory.h"
-#include "remote_signal_processing.h"
-#include "steer_adc_processing.h"
 
 /* USER CODE END Includes */
 
@@ -61,12 +58,19 @@ UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
-osThreadId TaskGetRemoteHandle;
-osThreadId TaskPrintResultHandle;
-osThreadId TaskGetSteerADCHandle;
+osThreadId defaultTaskHandle;
+osThreadId inputCaptureTaskHandle;
+osThreadId serialTaskHandle;
+osSemaphoreId inputCaptureSemHandle;
+osMessageQId inputCaptureQueueHandle;
+
+volatile uint32_t icValue1 = 0;
+volatile uint32_t icValue2 = 0;
+volatile uint32_t diffCapture = 0;
+volatile uint32_t frequency = 0;
+volatile uint8_t isFirstCapture = 1;
 /* USER CODE BEGIN PV */
-osMutexId vehicleDataMutexHandle;
-EventGroupHandle_t eventGroupHandle; // FreeRTOS Event Group
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -78,9 +82,9 @@ static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
-void EntryGetRemote(void const * argument);
-void EntryPrintResult(void const * argument);
-void EntryGetSteerADC(void const * argument);
+void StartDefaultTask(void const * argument);
+void StartInputCaptureTask(void const * argument);
+void StartSerialTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -88,8 +92,7 @@ void EntryGetSteerADC(void const * argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-// Shared Memory
-SharedMemory_t vehicle_data_shm_;
+
 /* USER CODE END 0 */
 
 /**
@@ -109,6 +112,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -127,31 +131,17 @@ int main(void)
   MX_TIM1_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-
-
-  
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
-  osMutexDef(vehicleDataMutex);
-  vehicleDataMutexHandle = osMutexCreate(osMutex(vehicleDataMutex));
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
-
-  // from remote_signal_processing.h
-  osSemaphoreDef(remoteSigSem);
-  remote_sig_sem_handle_ = osSemaphoreCreate(osSemaphore(remoteSigSem), 1);
-
-  // from steer_adc_processing.h
-  osSemaphoreDef(steerAdcSem);
-  steer_adc_sem_handle_ = osSemaphoreCreate(osSemaphore(steerAdcSem), 1);
-
-  // Create Event Group
-  eventGroupHandle = xEventGroupCreate();
-
+  osSemaphoreDef(inputCaptureSem);
+  inputCaptureSemHandle = osSemaphoreCreate(osSemaphore(inputCaptureSem), 1);
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -160,23 +150,22 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
+  osMessageQDef(inputCaptureQueue, 16, uint32_t);
+  inputCaptureQueueHandle = osMessageCreate(osMessageQ(inputCaptureQueue), NULL);
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of TaskGetRemote */
-  osThreadDef(TaskGetRemote, EntryGetRemote, osPriorityNormal, 0, 128);
-  TaskGetRemoteHandle = osThreadCreate(osThread(TaskGetRemote), NULL);
-
-  /* definition and creation of TaskPrintResult */
-  osThreadDef(TaskPrintResult, EntryPrintResult, osPriorityNormal, 0, 512);
-  TaskPrintResultHandle = osThreadCreate(osThread(TaskPrintResult), NULL);
-
-  /* definition and creation of TaskGetSteerADC */
-  osThreadDef(TaskGetSteerADC, EntryGetSteerADC, osPriorityNormal, 0, 128);
-  TaskGetSteerADCHandle = osThreadCreate(osThread(TaskGetSteerADC), NULL);
+  /* definition and creation of defaultTask */
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
+  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  osThreadDef(inputCaptureTask, StartInputCaptureTask, osPriorityNormal, 0, 128);
+  inputCaptureTaskHandle = osThreadCreate(osThread(inputCaptureTask), NULL);
+
+  osThreadDef(serialTask, StartSerialTask, osPriorityLow, 0, 512);
+  serialTaskHandle = osThreadCreate(osThread(serialTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -471,7 +460,8 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  // sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 15;
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
@@ -645,127 +635,99 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+  {
+    uint32_t currentCapture = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+    
+    // Check pin state to determine edge type (TIM2 CH1 is usually PA5)
+    // High state means we just had a Rising Edge (if polarity logic is standard)
+    // BUT in BothEdge mode, we are checking the state AFTER the edge.
+    // If we just had a Rising edge, pin should be HIGH.
+    // If we just had a Falling edge, pin should be LOW.
+    
+    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET) 
+    {
+      // Rising Edge: Start measurement
+      icValue1 = currentCapture;
+    }
+    else 
+    {
+      // Falling Edge: End measurement (High Pulse Width)
+      icValue2 = currentCapture;
 
+      if (icValue2 >= icValue1)
+      {
+        diffCapture = icValue2 - icValue1;
+      }
+      else
+      {
+        // Handle timer overflow
+        diffCapture = (0xFFFFFFFF - icValue1) + icValue2;
+      }
+      
+      // Send Pulse Width (in microseconds if 1MHz timer)
+      osSemaphoreRelease(inputCaptureSemHandle);
+    }
+  }
+}
+
+void StartInputCaptureTask(void const * argument)
+{
+  /* USER CODE BEGIN StartInputCaptureTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    // Wait for the semaphore (signal from ISR)
+    if (osSemaphoreWait(inputCaptureSemHandle, osWaitForever) == osOK)
+    {
+      // diffCapture is now the Pulse Width in microseconds
+      // Send width to Queue with 0 timeout (don't block if queue is full)
+      osMessagePut(inputCaptureQueueHandle, diffCapture, 0);
+    }
+  }
+  /* USER CODE END StartInputCaptureTask */
+}
+
+/* USER CODE BEGIN StartSerialTask */
+void StartSerialTask(void const * argument)
+{
+  osEvent event;
+  char buffer[50];
+
+  for(;;)
+  {
+    // Wait for data from Queue (timeout 1000ms)
+    event = osMessageGet(inputCaptureQueueHandle, 1000);
+
+    if (event.status == osEventMessage)
+    {
+      uint32_t width = event.value.v;
+      int len = sprintf(buffer, "Width: %lu us\r\n", width);
+      HAL_UART_Transmit(&huart3, (uint8_t*)buffer, len, 10);
+    }
+  }
+}
+/* USER CODE END StartSerialTask */
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_EntryGetRemote */
+/* USER CODE BEGIN Header_StartDefaultTask */
 /**
-  * @brief  Function implementing the TaskGetRemote thread.
+  * @brief  Function implementing the defaultTask thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_EntryGetRemote */
-void EntryGetRemote(void const * argument)
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN 5 */
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
-
-  RemoteSignals_t remote_signals;
-
   /* Infinite loop */
-  for(;;) {
-    remote_signals = GetRemoteSignals(); // This function waits for semaphore
-
-    osMutexWait(vehicleDataMutexHandle, osWaitForever);
-    vehicle_data_shm_.remote = remote_signals;
-    osMutexRelease(vehicleDataMutexHandle);
-
-    if (eventGroupHandle != NULL) {
-        xEventGroupSetBits(eventGroupHandle, EVT_REMOTE_UPDATED);
-    }
-
+  for(;;)
+  {
+    osDelay(1);
   }
   /* USER CODE END 5 */
-}
-
-/* USER CODE BEGIN Header_EntryPrintResult */
-/**
-* @brief Function implementing the TaskPrintResult thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_EntryPrintResult */
-void EntryPrintResult(void const * argument)
-{
-  /* USER CODE BEGIN EntryPrintResult */
-  SharedMemory_t print_data;
-  char str[100];
-  EventBits_t event_bits;
-
-  /* Infinite loop */
-  for(;;) {
-    event_bits = xEventGroupWaitBits(
-      eventGroupHandle,
-      EVT_ALL_UPDATED, // Wait for ANY bit (OR logic)
-      pdTRUE,          // Clear bits on exit (Auto-Reset)
-      pdFALSE,         // Wait for ANY bit (OR logic)
-      osWaitForever    // Block until event happens
-    );
-
-    // copy shared memory to local variable
-    osMutexWait(vehicleDataMutexHandle, osWaitForever);
-    print_data = vehicle_data_shm_;
-    osMutexRelease(vehicleDataMutexHandle);
-
-    // print remote signals
-    int str_len = 0;
-    if (event_bits & EVT_REMOTE_UPDATED) {
-        str_len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
-                          print_data.remote.steering_pulse_width_us,
-                          print_data.remote.throttle_pulse_width_us,
-                          print_data.remote.mode_pulse_width_us,
-                          print_data.remote.brake_pulse_width_us);
-        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
-    }
-
-    if (event_bits & EVT_STEER_ADC_UPDATED) {
-        str_len = snprintf(str, sizeof(str), "ADC: %lu\r\n", print_data.steer_adc);
-        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
-    }
-    
-    // if (event_bits & EVT_MOTOR_UPDATED) { ... }
-
-    // UBaseType_t hwm = uxTaskGetStackHighWaterMark(NULL);
-    // int len2 = snprintf(str, sizeof(str), "[Print Task] Word Usage: %lu\r\n", 512 - hwm);
-    // HAL_UART_Transmit(&huart3, (uint8_t*)str, len2, 100);
-
-    osDelay(100);
-  }
-  /* USER CODE END EntryPrintResult */
-}
-
-/* USER CODE BEGIN Header_EntryGetSteerADC */
-/**
-* @brief Function implementing the TaskGetSteerADC thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_EntryGetSteerADC */
-void EntryGetSteerADC(void const * argument)
-{
-  /* USER CODE BEGIN EntryGetSteerADC */
-  // HAL_ADC_Start_IT(&hadc1);
-
-  uint32_t steer_adc_value;
-
-  /* Infinite loop */
-  for(;;) {
-    steer_adc_value = GetSteerADCValue();   // This function waits for semaphore
-
-    osMutexWait(vehicleDataMutexHandle, osWaitForever);
-    vehicle_data_shm_.steer_adc = steer_adc_value;
-    osMutexRelease(vehicleDataMutexHandle);
-
-
-    if (eventGroupHandle != NULL) {
-        xEventGroupSetBits(eventGroupHandle, EVT_STEER_ADC_UPDATED);
-    }
-    osDelay(10); // Prevent CPU hogging
-  }
-  /* USER CODE END EntryGetSteerADC */
 }
 
 /**
