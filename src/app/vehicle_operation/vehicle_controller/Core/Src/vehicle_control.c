@@ -43,26 +43,26 @@ VehicleCommand_t PulseToVehicleCommand(RemoteSignals_t remote) {
     }
 
     // defining mode
-    if (remote.mode_pulse_width_us > 900 && remote.mode_pulse_width_us < 1200) {
+    if (remote.mode_pulse_width_us >= 900 && remote.mode_pulse_width_us < 1200) {
         command.mode = MANUAL_MODE;
-    } else if (remote.mode_pulse_width_us > 1200 && remote.mode_pulse_width_us < 1700) {
+    } else if (remote.mode_pulse_width_us >= 1200 && remote.mode_pulse_width_us < 1700) {
         command.mode = AUTO_MODE;
-    } else if (remote.mode_pulse_width_us > 1700 && remote.mode_pulse_width_us < 2100) {
+    } else if (remote.mode_pulse_width_us >= 1700 && remote.mode_pulse_width_us < 2100) {
         command.mode = BRAKE_MODE;
     }
-    if (command.mode == ERROR_MODE || command.mode == BRAKE_MODE) {
-        return command;
-    }
-
 
     // defining throttle, brake(reverse), accel
-    command.throttle = LinearMapping(remote.throttle_pulse_width_us,
-                                     NEUTRAL_PULSE_WIDTH_US, MAX_PULSE_WIDTH_US,
-                                    0, MAX_THROTTLE);
-    // brake is reverse of throttle
-    command.brake = LinearMapping(remote.throttle_pulse_width_us,
-                                  NEUTRAL_PULSE_WIDTH_US, MIN_PULSE_WIDTH_US,
-                                  0, MAX_THROTTLE);
+    if (remote.throttle_pulse_width_us > NEUTRAL_PULSE_WIDTH_US) {
+        command.throttle = LinearMapping(remote.throttle_pulse_width_us,
+                                        NEUTRAL_PULSE_WIDTH_US, MAX_PULSE_WIDTH_US,
+                                        0, MAX_THROTTLE);
+        command.brake = 0.0;
+    } else {
+        command.throttle = 0.0;
+        command.brake = LinearMapping(remote.throttle_pulse_width_us,
+                                      NEUTRAL_PULSE_WIDTH_US, MIN_PULSE_WIDTH_US,
+                                      0, MAX_THROTTLE);
+    }
 
     command.steer_tire_degree = 0; // TODO : change by PID control
 
@@ -92,7 +92,7 @@ void MoveForward(double pedal, uint32_t arr) {
     HAL_GPIO_WritePin(LEFT_IN1_GPIO_Port, LEFT_IN1_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(LEFT_IN2_GPIO_Port, LEFT_IN2_Pin, GPIO_PIN_RESET);
 
-    double ccr = (uint32_t)(pedal / MAX_THROTTLE) * arr;
+    uint32_t ccr = (double)(pedal / MAX_THROTTLE) * arr;
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, ccr);      // RIGHT MOTOR
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, ccr);      // LEFT MOTOR
 }
@@ -103,7 +103,7 @@ void MoveBackward(double pedal, uint32_t arr) {
     HAL_GPIO_WritePin(LEFT_IN1_GPIO_Port, LEFT_IN1_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(LEFT_IN2_GPIO_Port, LEFT_IN2_Pin, GPIO_PIN_SET);
 
-    double ccr = (uint32_t)(pedal / MAX_THROTTLE) * arr;
+    uint32_t ccr = (double)(pedal / MAX_THROTTLE) * arr;
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, ccr);      // RIGHT MOTOR
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, ccr);      // LEFT MOTOR
 }
