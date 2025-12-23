@@ -26,6 +26,7 @@
 #include "struct_shared_memory.h"
 #include "remote_signal_processing.h"
 #include "steer_adc_processing.h"
+#include "vehicle_control.h"
 
 /* USER CODE END Includes */
 
@@ -64,6 +65,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
 osThreadId TaskGetSteerADCHandle;
+osThreadId TaskVehicleContHandle;
 /* USER CODE BEGIN PV */
 osMutexId vehicleDataMutexHandle;
 EventGroupHandle_t eventGroupHandle; // FreeRTOS Event Group
@@ -81,6 +83,7 @@ static void MX_ADC1_Init(void);
 void EntryGetRemote(void const * argument);
 void EntryPrintResult(void const * argument);
 void EntryGetSteerADC(void const * argument);
+void EntryVehicleControl(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -174,6 +177,10 @@ int main(void)
   /* definition and creation of TaskGetSteerADC */
   osThreadDef(TaskGetSteerADC, EntryGetSteerADC, osPriorityNormal, 0, 128);
   TaskGetSteerADCHandle = osThreadCreate(osThread(TaskGetSteerADC), NULL);
+
+  /* definition and creation of TaskVehicleCont */
+  osThreadDef(TaskVehicleCont, EntryVehicleControl, osPriorityNormal, 0, 128);
+  TaskVehicleContHandle = osThreadCreate(osThread(TaskVehicleCont), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -362,9 +369,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
+  htim1.Init.Prescaler = 84-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
+  htim1.Init.Period = 1000-1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -717,7 +724,7 @@ void EntryPrintResult(void const * argument)
                           print_data.remote.steering_pulse_width_us,
                           print_data.remote.throttle_pulse_width_us,
                           print_data.remote.mode_pulse_width_us,
-                          print_data.remote.brake_pulse_width_us);
+                          print_data.remote.toggle_pulse_width_us);
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
 
@@ -726,11 +733,15 @@ void EntryPrintResult(void const * argument)
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
     
-    // if (event_bits & EVT_MOTOR_UPDATED) { ... }
-
-    // UBaseType_t hwm = uxTaskGetStackHighWaterMark(NULL);
-    // int len2 = snprintf(str, sizeof(str), "[Print Task] Word Usage: %lu\r\n", 512 - hwm);
-    // HAL_UART_Transmit(&huart3, (uint8_t*)str, len2, 100);
+    if (event_bits & EVT_VEHICLE_COMMAND_UPDATED) {
+        str_len = snprintf(str, sizeof(str), "CMD: %f %f %f %d %d\r\n",
+                          print_data.vehicle_command.throttle,
+                          print_data.vehicle_command.brake,
+                          print_data.vehicle_command.steer_tire_degree,
+                          print_data.vehicle_command.mode,
+                          print_data.vehicle_command.toggle);
+        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+    }
 
     osDelay(100);
   }
@@ -766,6 +777,65 @@ void EntryGetSteerADC(void const * argument)
     osDelay(10); // Prevent CPU hogging
   }
   /* USER CODE END EntryGetSteerADC */
+}
+
+/* USER CODE BEGIN Header_EntryVehicleControl */
+/**
+* @brief Function implementing the TaskVehicleCont thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_EntryVehicleControl */
+void EntryVehicleControl(void const * argument)
+{
+  /* USER CODE BEGIN EntryVehicleControl */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+
+  uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);      // arr is fixed value
+
+  SharedMemory_t vehicle_data;
+
+  /* Infinite loop */
+  for(;;) {
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data = vehicle_data_shm_;
+    osMutexRelease(vehicleDataMutexHandle);
+
+    VehicleCommand_t command = PulseToVehicleCommand(vehicle_data.remote);
+    if (command.mode == MANUAL_MODE) {
+      if (command.throttle >= 0.5) {
+        MoveForward(command.throttle, arr);
+      } else if (command.brake >= 0.5) {
+        MoveBackward(command.brake, arr);
+      } else {
+        StopMotor();
+      }
+
+      MoveSteer(command.steer_tire_degree, arr);
+    }
+    
+    else if (command.mode == AUTO_MODE) {
+        StopMotor();       // need to fix (or another task)
+    }
+    
+    else if (command.mode == BRAKE_MODE || command.mode == ERROR_MODE) {
+        StopMotor();
+    }
+
+
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data_shm_.vehicle_command = command;
+    osMutexRelease(vehicleDataMutexHandle);
+
+
+    if (eventGroupHandle != NULL) {
+        xEventGroupSetBits(eventGroupHandle, EVT_VEHICLE_COMMAND_UPDATED);
+    }
+    osDelay(10);   // 100 Hz
+  }
+  /* USER CODE END EntryVehicleControl */
 }
 
 /**

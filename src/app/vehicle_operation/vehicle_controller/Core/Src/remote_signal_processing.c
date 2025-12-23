@@ -42,7 +42,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
         if (HAL_GPIO_ReadPin(TIM2_CH3_GPIO_Port, TIM2_CH3_Pin) == GPIO_PIN_SET) {
             ch3_rising_edge_us = current_capture_us;
         } else {
-            remote_signals.mode_pulse_width_us = CalcPulseWidth(ch3_rising_edge_us, current_capture_us);
+            remote_signals.toggle_pulse_width_us = CalcPulseWidth(ch3_rising_edge_us, current_capture_us);
             rx_sync_flags |= RX_FLAG_CH3;
         }
     }
@@ -51,7 +51,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
         if (HAL_GPIO_ReadPin(TIM2_CH4_GPIO_Port, TIM2_CH4_Pin) == GPIO_PIN_SET) {
             ch4_rising_edge_us = current_capture_us;
         } else {
-            remote_signals.brake_pulse_width_us = CalcPulseWidth(ch4_rising_edge_us, current_capture_us);
+            remote_signals.mode_pulse_width_us = CalcPulseWidth(ch4_rising_edge_us, current_capture_us);
             rx_sync_flags |= RX_FLAG_CH4;
         }
     }
@@ -75,8 +75,8 @@ RemoteSignals_t GetRemoteSignals(void) {
     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
     remote_signals.steering_pulse_width_us = -1;
     remote_signals.throttle_pulse_width_us = -1;
+    remote_signals.toggle_pulse_width_us = -1;
     remote_signals.mode_pulse_width_us = -1;
-    remote_signals.brake_pulse_width_us = -1;
     remote_signals.alive = false;
     return remote_signals; // Should not reach here
 }

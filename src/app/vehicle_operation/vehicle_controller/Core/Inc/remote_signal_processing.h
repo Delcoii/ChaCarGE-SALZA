@@ -7,22 +7,14 @@
 #include "main.h"
 #include "cmsis_os.h"
 
+#include "struct_remote_signal.h"
+
 // bit flag for checking all channel received
 #define RX_FLAG_CH1  (1 << 0) // 0x01
 #define RX_FLAG_CH2  (1 << 1) // 0x02
 #define RX_FLAG_CH3  (1 << 2) // 0x04
 #define RX_FLAG_CH4  (1 << 3) // 0x08
 #define RX_FLAG_ALL  (0x0F)   // all channel received
-
-
-typedef struct {
-    uint32_t steering_pulse_width_us;
-    uint32_t throttle_pulse_width_us;
-    uint32_t mode_pulse_width_us;
-    uint32_t brake_pulse_width_us;
-    bool alive;
-} RemoteSignals_t;
-
 
 
 extern osSemaphoreId remote_sig_sem_handle_;
