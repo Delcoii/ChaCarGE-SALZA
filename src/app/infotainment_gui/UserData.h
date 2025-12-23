@@ -21,11 +21,14 @@ private:
 private:
     uint16_t userTotalScore;
     uint8_t curScores[static_cast<uint8_t>(ScoreType::MAX_SCORE_TYPES)];
+    std::string username;
 public:
     static UserData& getInstance();
     bool loadFromJsonFile(const std::string& path);
+    bool saveToJsonFile(const std::string& path) const;
     uint16_t getUserTotalScore();
     uint8_t getCurScore(ScoreType type);
+    const std::string& getUsername() const;
 };
     
 #endif // USERDATA_H

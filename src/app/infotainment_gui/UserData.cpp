@@ -3,6 +3,7 @@
 #include <fstream>
 #include <array>
 #include <limits>
+#include <iostream>
 #include <nlohmann/json.hpp>
 
 UserData::UserData() : userTotalScore(0) {
@@ -24,6 +25,10 @@ uint8_t UserData::getCurScore(ScoreType type) {
     return curScores[static_cast<uint8_t>(type)];
 }
 
+const std::string& UserData::getUsername() const {
+    return username;
+}
+
 using json = nlohmann::json;
 
 namespace {
@@ -37,6 +42,32 @@ namespace {
         "SHARP_TURNS",
         "SIGNAL_VIOLATIONS"
     };
+}
+
+bool UserData::saveToJsonFile(const std::string& path) const {
+    json j;
+    j["username"] = username;
+    j["userScore"] = userTotalScore;
+
+    json scoresObj = json::object();
+    for (size_t i = 0; i < kScoreCount; ++i) {
+        scoresObj[kScoreKeys[i]] = curScores[i];
+    }
+    j["curScores"] = std::move(scoresObj);
+
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) return false;
+    ofs << j.dump(4);
+
+    // Log current scores to terminal
+    std::cout << "[UserData] Saving curScores -> ";
+    for (size_t i = 0; i < kScoreCount; ++i) {
+        std::cout << kScoreKeys[i] << ":" << static_cast<int>(curScores[i]);
+        if (i + 1 < kScoreCount) std::cout << ", ";
+    }
+    std::cout << std::endl;
+
+    return true;
 }
 
 bool UserData::loadFromJsonFile(const std::string& path)
@@ -57,8 +88,14 @@ bool UserData::loadFromJsonFile(const std::string& path)
     uint16_t newUserScore = 0;
     std::array<uint8_t, kScoreCount> newCurScores{};
     newCurScores.fill(0);
+    std::string newUsername;
 
     try {
+        // username
+        if (!j.contains("username") || !j["username"].is_string())
+            return false;
+        newUsername = j["username"].get<std::string>();
+
         // userScore
         if (!j.contains("userScore") || !j["userScore"].is_number_integer())
             return false;
@@ -92,6 +129,7 @@ bool UserData::loadFromJsonFile(const std::string& path)
     // 예: userScore가 curScores 합과 일치해야 한다 등
 
     // 5) apply (성공했을 때만 실제 멤버 갱신)
+    username = std::move(newUsername);
     userTotalScore = newUserScore;
     for (size_t i = 0; i < kScoreCount; ++i) {
         curScores[i] = newCurScores[i];

@@ -2,29 +2,61 @@
 #include "UserData.h"
 #include "ImageData.h"
 #include "BaseData.h"
+#include "RenderingData.h"
+#include "InfotainmentWidget.h"
+#include "AppController.h"
 
-int main() {
-    // 1. Get User Data
+#include <QApplication>
+#include <QTimer>
+#include <QObject>
+#include <thread>
+#include <chrono>
+#include <atomic>
+
+int main(int argc, char* argv[]) {
+    QApplication app(argc, argv);
+
     UserData& userData = UserData::getInstance();
-    if (!userData.loadFromJsonFile("user_data.json")) {
+    const std::string userDataPath = "../../../resources/userdata/user_data.json";
+    if (!userData.loadFromJsonFile(userDataPath)) {
         std::cerr << "Failed to load user data from JSON file." << std::endl;
         return -1;
     }
 
-    // 2. Shared Memory
-    // 3. ImageData Instance
     ImageData& imageData = ImageData::getInstance();
+    AppController::loadAssets(imageData);
 
-    // 4. BaseData Instance
     BaseData& baseData = BaseData::getInstance();
+    RenderingData& renderingData = RenderingData::getInstance();
 
+    InfotainmentWidget window(imageData, baseData, renderingData);
+    window.setWindowTitle("Infotainment Layout Demo");
 
-    // Create BaseData Thread
-    // Create ComposeDisplay Thread
+    // Periodic saver for user data
+    std::atomic<bool> keepSaving{true};
+    std::thread saver([&]() {
+        while (keepSaving.load()) {
+            userData.saveToJsonFile(userDataPath);
+            for (int i = 0; i < 50 && keepSaving.load(); ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+    });
 
-    // Destroy BaseData Thread
-    // Destroy ImageData Thread
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {
+        keepSaving.store(false);
+        userData.saveToJsonFile(userDataPath);
+    });
 
-    // Save User Data ( Using destructor )
-    return 0;
+    AppController controller(baseData, renderingData, window);
+    controller.start();
+
+    window.show();
+    const int ret = app.exec();
+
+    keepSaving.store(false);
+    if (saver.joinable()) saver.join();
+    userData.saveToJsonFile(userDataPath);
+    controller.join();
+    return ret;
 }

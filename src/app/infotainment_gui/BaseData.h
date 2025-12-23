@@ -1,6 +1,7 @@
 #ifndef BASE_DATA_H
 #define BASE_DATA_H
 #include <cstdint>
+#include <mutex>
 #include "UserData.h"
 #include "ImageData.h"
 
@@ -36,8 +37,18 @@ private:
     BaseData& operator=(const BaseData&) = delete;  
 public:
     static BaseData& getInstance();
+
+    // Note: Read-only accessor for the current frame snapshot.
+    // Later, producer thread can update curFrameData via dedicated setters.
+    FrameData getFrameDataCopy() const;
+
+    // Temporary setter for prototyping/demo; replace with thread-safe updater later.
+    void setFrameSignals(uint8_t signSignal, uint8_t warningSignal, uint8_t emotion, uint8_t displayType);
+    uint8_t getCurDisplayType() const;
+
 private:
     FrameData curFrameData;
+    mutable std::mutex mtx;
 };
 
 #endif // BASE_DATA_H
