@@ -26,6 +26,7 @@
 #include "struct_shared_memory.h"
 #include "remote_signal_processing.h"
 #include "steer_adc_processing.h"
+#include "vehicle_control.h"
 
 /* USER CODE END Includes */
 
@@ -732,11 +733,14 @@ void EntryPrintResult(void const * argument)
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
     
-    // if (event_bits & EVT_MOTOR_UPDATED) { ... }
-
-    // UBaseType_t hwm = uxTaskGetStackHighWaterMark(NULL);
-    // int len2 = snprintf(str, sizeof(str), "[Print Task] Word Usage: %lu\r\n", 512 - hwm);
-    // HAL_UART_Transmit(&huart3, (uint8_t*)str, len2, 100);
+    if (event_bits & EVT_VEHICLE_COMMAND_UPDATED) {
+        str_len = snprintf(str, sizeof(str), "CMD: %f %f %f %d\r\n",
+                          print_data.vehicle_command.throttle,
+                          print_data.vehicle_command.brake,
+                          print_data.vehicle_command.steer_tire_degree,
+                          print_data.vehicle_command.mode);
+        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+    }
 
     osDelay(100);
   }
@@ -787,7 +791,7 @@ void EntryVehicleControl(void const * argument)
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-  
+
   uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);      // arr is fixed value
 
   SharedMemory_t vehicle_data;
@@ -798,9 +802,28 @@ void EntryVehicleControl(void const * argument)
     vehicle_data = vehicle_data_shm_;
     osMutexRelease(vehicleDataMutexHandle);
 
+    VehicleCommand_t command = PulseToVehicleCommand(vehicle_data.remote);
+    if (command.mode == MANUAL_MODE) {
+        MoveForward(command.throttle, arr);
+        MoveSteer(command.steer_tire_degree, arr);
+    }
     
+    else if (command.mode == AUTO_MODE) {
+        StopMotor();       // need to fix (or another task)
+    }
+    
+    else if (command.mode == BRAKE_MODE || command.mode == ERROR_MODE) {
+        StopMotor();
+    }
 
 
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data_shm_.vehicle_command = command;
+    osMutexRelease(vehicleDataMutexHandle);
+
+    if (eventGroupHandle != NULL) {
+        xEventGroupSetBits(eventGroupHandle, EVT_VEHICLE_COMMAND_UPDATED);
+    }
 
     osDelay(10);   // 100 Hz
   }
