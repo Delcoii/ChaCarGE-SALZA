@@ -8,6 +8,10 @@
 #include <QProgressBar>
 #include <QPainter>
 #include <QColor>
+#include <algorithm>
+#include <random>
+#include <QTimer>
+#include "UserData.h"
 
 InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, RenderingData& rendering, QWidget* parent)
     : QWidget(parent)
@@ -17,14 +21,15 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     , overPix(images.getSignImage(ImageData::SignType::OVERSPEED))
     , turnPix(images.getSignImage(ImageData::SignType::OVERTURN))
     , gif(images.getEmotionGif(ImageData::EmotionGifType::HAPPY))
+    , imageData(images)
     , baseData(base)
     , renderingData(rendering)
 {
-    setMinimumSize(900, 540);
+    setMinimumSize(1512, 982);
     setStyleSheet("background: #0f1115; color: #e7e9ec; font-family: 'Helvetica Neue', Arial;");
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(24, 20, 24, 20);
+    root->setContentsMargins(24, 20, 24, 60); // lift bottom button
     root->setSpacing(16);
 
     auto* header = new QHBoxLayout();
@@ -38,7 +43,6 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     headerTitle->setAlignment(Qt::AlignCenter);
     headerTitle->setStyleSheet("font-size: 22px; font-weight: 800; color: #5dd1ff;");
     signalLabel = createImageLabel(1, 1);
-    signalLabel->setFixedSize(144, 144); // 1.5x previous size
     nameSignalBox->addWidget(headerTitle, 0, Qt::AlignCenter);
     nameSignalBox->addWidget(signalLabel, 0, Qt::AlignCenter);
     header->addLayout(nameSignalBox, 0);
@@ -49,24 +53,14 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     stack = new QStackedLayout();
 
     mainContainer = new QWidget(this);
-    auto* body = new QHBoxLayout(mainContainer);
-    body->setSpacing(20);
+    auto* body = new QVBoxLayout(mainContainer);
+    body->setContentsMargins(0, 0, 0, 0);
+    body->setSpacing(8);
 
-    auto* leftCol = new QVBoxLayout();
-    leftCol->setSpacing(12);
-    bumpLabel = createImageLabel(160, 160);
-    regalLabel = createImageLabel(160, 160);
-    leftCol->addWidget(bumpLabel, 0, Qt::AlignCenter);
-    leftCol->addWidget(regalLabel, 0, Qt::AlignCenter);
-    leftCol->addStretch();
-
-    auto* centerCol = new QVBoxLayout();
-    centerCol->setSpacing(8);
-    centerCol->setAlignment(Qt::AlignCenter);
-
+    // Gauge only (no numeric score)
     auto* diamondRow = new QHBoxLayout();
     diamondRow->setSpacing(4);
-    diamondRow->setAlignment(Qt::AlignCenter);
+    diamondRow->setAlignment(Qt::AlignLeft);
     diamondLabels.reserve(20);
     for (int i = 0; i < 20; ++i) {
         auto* d = new QLabel(this);
@@ -74,23 +68,31 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
         diamondLabels.push_back(d);
         diamondRow->addWidget(d);
     }
-    centerCol->addLayout(diamondRow);
+    body->addLayout(diamondRow);
+
+    // Content row: GIF left, warning centered in remaining space
+    auto* contentRow = new QHBoxLayout();
+    contentRow->setContentsMargins(0, 0, 0, 0);
+    contentRow->setSpacing(0);
+    contentRow->setAlignment(Qt::AlignVCenter);
 
     gifLabel = createImageLabel(360, 360);
     gifLabel->setStyleSheet("background: #1a1d24; border: 1px solid #2a2f3a; border-radius: 12px;");
-    centerCol->addWidget(gifLabel, 0, Qt::AlignCenter);
+    contentRow->addWidget(gifLabel, 0, Qt::AlignLeft | Qt::AlignVCenter);
 
-    auto* rightCol = new QVBoxLayout();
-    rightCol->setSpacing(12);
-    overLabel = createImageLabel(160, 160);
-    turnLabel = createImageLabel(160, 160);
-    rightCol->addWidget(overLabel, 0, Qt::AlignCenter);
-    rightCol->addWidget(turnLabel, 0, Qt::AlignCenter);
-    rightCol->addStretch();
+    warningLabel = createImageLabel(200, 200);
+    warningLabel->setStyleSheet("background: transparent;");
+    auto* warningWrap = new QHBoxLayout();
+    warningWrap->setContentsMargins(0, 0, 0, 0);
+    warningWrap->setSpacing(0);
+    warningWrap->addStretch();
+    warningWrap->addWidget(warningLabel, 0, Qt::AlignCenter);
+    warningWrap->addStretch();
+    auto* warningContainer = new QWidget(this);
+    warningContainer->setLayout(warningWrap);
+    contentRow->addWidget(warningContainer, 1);
 
-    body->addLayout(leftCol, 1);
-    body->addLayout(centerCol, 2);
-    body->addLayout(rightCol, 1);
+    body->addLayout(contentRow, 1);
     stack->addWidget(mainContainer);
 
     // Score container
@@ -120,7 +122,7 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
         auto* row = new QHBoxLayout();
         row->setSpacing(12);
         auto* name = new QLabel(this);
-        name->setStyleSheet("font-size: 14px; color: #cfd2d8;");
+        name->setStyleSheet("font-size: 42px; color: #cfd2d8;");
         auto* bar = new QProgressBar(this);
         bar->setRange(0, 100);
         bar->setTextVisible(false);
@@ -149,6 +151,17 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     RenderingData::RenderPayload initPayload{};
     initPayload.userTotalScore = BaseData::getInstance().getFrameDataCopy().userData.getUserTotalScore();
     applyImages(initPayload);
+
+    // Timers for side icon flash
+    flashTimer = new QTimer(this);
+    flashTimer->setInterval(6000); // every 6s
+    connect(flashTimer, &QTimer::timeout, this, &InfotainmentWidget::showRandomSide);
+    flashTimer->start();
+
+    hideTimer = new QTimer(this);
+    hideTimer->setInterval(3000); // hide after 3s
+    hideTimer->setSingleShot(true);
+    connect(hideTimer, &QTimer::timeout, this, &InfotainmentWidget::hideSides);
 }
 
 InfotainmentWidget::~InfotainmentWidget() = default;
@@ -211,29 +224,40 @@ QPixmap makeSegmentPixmap(const QColor& fill, const QColor& border) {
 } // namespace
 
 void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload) {
-    const QSize sigSize(96, 96);
-    setPixmapToLabel(signalLabel, signalPix, sigSize.width(), sigSize.height(), "Signal?");
+    const int sigSide = std::max(120, static_cast<int>(height() * 0.15));
+    setPixmapToLabel(signalLabel, signalPix, sigSide, sigSide, "Signal?");
 
-    const int centerSize = std::max(240, std::min(width(), height()) / 3);
-    gifLabel->setMinimumSize(centerSize, centerSize);
+    const int centerSize = std::max(320, std::min(static_cast<int>(width() * 0.4), static_cast<int>(height() * 0.6)));
+    const int gifSize = static_cast<int>(centerSize * 2 / 3); // reduce to ~66%
+    gifSizePx = gifSize;                                      // keep stable target
+    gifLabel->setMinimumSize(gifSize, gifSize);
+    gifLabel->setMaximumSize(gifSize, gifSize);
     const QPixmap* centerPix = centerOverride ? centerOverride : signalPix;
-    if (gif) {
-        gif->setScaledSize(QSize(centerSize, centerSize));
-        gifLabel->setMovie(gif);
-        gif->start();
+    // cache movies
+    if (!happyGif) happyGif = imageData.getEmotionGif(ImageData::EmotionGifType::HAPPY);
+    if (!badGif)   badGif   = imageData.getEmotionGif(ImageData::EmotionGifType::BAD_FACE);
+
+    if (warningActive && badGif) {
+        setGifMovie(badGif, gifSizePx);
+    } else if (happyGif) {
+        setGifMovie(happyGif, gifSizePx);
     } else if (centerPix) {
         setPixmapToLabel(gifLabel, centerPix, centerSize, centerSize, "Center?");
     } else {
         gifLabel->setText("GIF missing");
     }
 
-    const int sideSize = centerSize / 2;
-    setPixmapToLabel(bumpLabel, bumpPix, sideSize, sideSize, "bump?");
-    setPixmapToLabel(regalLabel, regalPix, sideSize, sideSize, "regal?");
-    setPixmapToLabel(overLabel, overPix, sideSize, sideSize, "over?");
-    setPixmapToLabel(turnLabel, turnPix, sideSize, sideSize, "turn?");
+    // Warning image height matches GIF; width scales to keep square
+    sideSizePx = gifSize;
+    warningLabel->setFixedSize(sideSizePx, sideSizePx);
+    setPixmapToLabel(warningLabel, nullptr, sideSizePx, sideSizePx, "");
 
     updateDiamondGauge(payload.userTotalScore);
+
+    // hide all initially; flashing timer will show one
+    hideSides();
+
+    // update score gauge only (no numeric text)
 }
 
 void InfotainmentWidget::applyScoreView(const RenderingData::RenderPayload& payload) {
@@ -255,6 +279,7 @@ void InfotainmentWidget::applyDetailView(const RenderingData::RenderPayload& pay
     for (size_t i = 0; i < maxIdx; ++i) {
         detailRows[i].name->setText(kNames[i]);
         detailRows[i].bar->setValue(payload.curScores[i]);
+        detailRows[i].value->setStyleSheet("font-size: 42px; color: #e7e9ec;");
         detailRows[i].value->setText(QString::number(payload.curScores[i]));
     }
 }
@@ -281,9 +306,72 @@ void InfotainmentWidget::updateDiamondGauge(uint16_t score) {
     if (diamondEmpty.isNull()) {
         diamondEmpty = makeSegmentPixmap(QColor("#4a4f5a"), QColor("#2a2f3a"));
     }
+    if (diamondRed.isNull()) {
+        diamondRed = makeSegmentPixmap(QColor("#ff4d4d"), QColor("#b30000"));
+    }
     const int filled = std::max(0, std::min(20, static_cast<int>(score / 5)));
+    // Base fill for current state
     for (int i = 0; i < static_cast<int>(diamondLabels.size()); ++i) {
         if (i < filled) diamondLabels[i]->setPixmap(diamondFilled);
         else diamondLabels[i]->setPixmap(diamondEmpty);
+    }
+    // Flash any segments that turned off (3 on/off cycles → 6 steps)
+    if (lastFilled > filled) {
+        const int steps = 6;
+        const int intervalMs = 150;
+        for (int i = filled; i < lastFilled && i < static_cast<int>(diamondLabels.size()); ++i) {
+            QLabel* lbl = diamondLabels[i];
+            for (int s = 0; s < steps; ++s) {
+                QTimer::singleShot(s * intervalMs, this, [this, lbl, s]() {
+                    if (s == steps - 1) {
+                        lbl->setPixmap(diamondEmpty);
+                    } else if (s % 2 == 0) {
+                        lbl->setPixmap(diamondRed);
+                    } else {
+                        lbl->setPixmap(diamondEmpty);
+                    }
+                });
+            }
+        }
+    }
+    lastFilled = filled;
+}
+
+void InfotainmentWidget::showRandomSide() {
+    hideSides();
+    std::uniform_int_distribution<int> dist(0, 3);
+    const int pick = dist(rng);
+    switch (pick) {
+        case 0: setPixmapToLabel(warningLabel, bumpPix, sideSizePx, sideSizePx, ""); break;
+        case 1: setPixmapToLabel(warningLabel, regalPix, sideSizePx, sideSizePx, ""); break;
+        case 2: setPixmapToLabel(warningLabel, overPix, sideSizePx, sideSizePx, ""); break;
+        case 3: setPixmapToLabel(warningLabel, turnPix, sideSizePx, sideSizePx, ""); break;
+    }
+    // reduce user score by 5 each warning
+    UserData::getInstance().adjustUserTotalScore(-5);
+    updateDiamondGauge(UserData::getInstance().getUserTotalScore());
+
+    warningActive = true;
+    setGifMovie(badGif ? badGif : happyGif, gifSizePx);
+    hideTimer->start();
+}
+
+void InfotainmentWidget::hideSides() {
+    if (warningEmpty.isNull()) {
+        warningEmpty = QPixmap(sideSizePx, sideSizePx);
+        warningEmpty.fill(Qt::transparent);
+    }
+    warningLabel->setPixmap(warningEmpty);
+    warningActive = false;
+    setGifMovie(happyGif, gifSizePx);
+}
+
+void InfotainmentWidget::setGifMovie(QMovie* movie, int size) {
+    if (!movie) return;
+    movie->setScaledSize(QSize(size, size));
+    if (currentGif != movie) {
+        gifLabel->setMovie(movie);
+        movie->start();
+        currentGif = movie;
     }
 }

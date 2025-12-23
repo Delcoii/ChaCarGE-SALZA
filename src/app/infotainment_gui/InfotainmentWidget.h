@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <vector>
+#include <random>
 #include "RenderingData.h"
 #include "ImageData.h"
 
@@ -23,6 +24,10 @@ private:
     void applyDetailView(const RenderingData::RenderPayload& payload);
     void toggleDisplayType();
     void updateDiamondGauge(uint16_t score);
+    void scheduleFlash();
+    void showRandomSide();
+    void hideSides();
+    void setGifMovie(QMovie* movie, int size);
 
 private:
     const QPixmap* signalPix;
@@ -34,6 +39,7 @@ private:
     const QPixmap* centerOverride = nullptr;
     const QPixmap* tierPix = nullptr;
 
+    ImageData& imageData;
     BaseData& baseData;
     RenderingData& renderingData;
 
@@ -56,8 +62,24 @@ private:
     struct DetailRow { QLabel* name; QProgressBar* bar; QLabel* value; };
     std::vector<DetailRow> detailRows;
     std::vector<QLabel*> diamondLabels;
+    QLabel* gifScoreLabel = nullptr;
     QPixmap diamondFilled;
     QPixmap diamondEmpty;
+    QPixmap diamondRed;
+    class QTimer* flashTimer = nullptr;
+    class QTimer* hideTimer = nullptr;
+    std::mt19937 rng{std::random_device{}()};
+    bool gifAttached = false;
+    int sideSizePx = 32;
+    QPixmap emptySide;
+    QLabel* warningLabel = nullptr;
+    QPixmap warningEmpty;
+    QMovie* happyGif = nullptr;
+    QMovie* badGif = nullptr;
+    QMovie* currentGif = nullptr;
+    bool warningActive = false;
+    int gifSizePx = 0;
+    int lastFilled = 0;
 };
 
 #endif // INFOTAINMENT_WIDGET_H

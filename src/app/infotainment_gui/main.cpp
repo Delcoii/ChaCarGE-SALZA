@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
 
     InfotainmentWidget window(imageData, baseData, renderingData);
     window.setWindowTitle("Infotainment Layout Demo");
+    window.resize(1512, 982);
 
     // Periodic saver for user data
     std::atomic<bool> keepSaving{true};

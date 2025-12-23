@@ -38,6 +38,7 @@ void AppController::loadAssets(ImageData& imageData) {
     imageData.loadSignImage(ImageData::SignType::OVERTURN, base + "turn.png");
     imageData.loadSignImage(ImageData::SignType::SIGNAL_VIOLATION, base + "regalSignal.png");
     imageData.loadEmotionGif(ImageData::EmotionGifType::HAPPY, base + "thumbs-up-2584.gif", 150);
+    imageData.loadEmotionGif(ImageData::EmotionGifType::BAD_FACE, base + "bad_face.gif", 150);
     imageData.loadTierImage(ImageData::TierType::BRONZE, base + "bronze.png");
     imageData.loadTierImage(ImageData::TierType::SILVER, base + "silver.png");
     imageData.loadTierImage(ImageData::TierType::GOLD, base + "gold.png");

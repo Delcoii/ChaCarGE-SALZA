@@ -35,9 +35,7 @@ public:
 
     enum class EmotionGifType : uint8_t {
         HAPPY,
-        //SAD,
-        //ANGRY,
-        //SURPRISED,
+        BAD_FACE,
         MAX_GIF_TYPES,
     };
 

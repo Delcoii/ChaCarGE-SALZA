@@ -21,6 +21,13 @@ uint16_t UserData::getUserTotalScore() {
     return userTotalScore;
 }
 
+void UserData::adjustUserTotalScore(int delta) {
+    int newVal = static_cast<int>(userTotalScore) + delta;
+    if (newVal < 0) newVal = 0;
+    if (newVal > std::numeric_limits<uint16_t>::max()) newVal = std::numeric_limits<uint16_t>::max();
+    userTotalScore = static_cast<uint16_t>(newVal);
+}
+
 uint8_t UserData::getCurScore(ScoreType type) {
     return curScores[static_cast<uint8_t>(type)];
 }

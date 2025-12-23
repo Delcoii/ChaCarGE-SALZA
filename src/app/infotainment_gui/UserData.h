@@ -27,6 +27,7 @@ public:
     bool loadFromJsonFile(const std::string& path);
     bool saveToJsonFile(const std::string& path) const;
     uint16_t getUserTotalScore();
+    void adjustUserTotalScore(int delta); // clamps to [0, uint16_max]
     uint8_t getCurScore(ScoreType type);
     const std::string& getUsername() const;
 };
