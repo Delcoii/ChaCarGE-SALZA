@@ -20,8 +20,8 @@
 #define STEER_ADC_RIGHT_FULL    510
 #define STEER_ADC_LEFT_FULL     1550
 
-#define KP                      3
-#define KI                      0
+#define KP                      4.5
+#define KI                      0.1
 #define KD                      0
 
 typedef enum {
