@@ -54,14 +54,14 @@ int main()
         // repeating every 20 seconds
         double cycle = fmod(time_step, 20.0);
         
-        if (cycle < 8.0)
+        if (cycle < 8.0 && p_shm->given_info.traffic_state.sign_state != TRAFFIC_STATE_RED)
         { 
             // 0~8sec: accel section
             p_shm->given_info.vehicle_command.throttle = cycle * 10.0; // 0 ~ 80
             if(p_shm->given_info.vehicle_command.throttle > 100) p_shm->given_info.vehicle_command.throttle = 100;
             p_shm->given_info.vehicle_command.brake = 0;
         } 
-        else if (cycle < 15.0)
+        else if (cycle < 15.0 && p_shm->given_info.traffic_state.sign_state != TRAFFIC_STATE_RED)
         {
             // 8~15sec: constant speed (no throttle, coasting)
             p_shm->given_info.vehicle_command.throttle = 30; 
@@ -81,9 +81,9 @@ int main()
         traffic_timer++;
         if (traffic_timer % 50 == 0)
         { // 0.1s * 50 = 5초
-            uint32_t current = p_shm->given_info.traffic_state.data;
+            uint32_t current = p_shm->given_info.traffic_state.sign_state;
             // 0(Red) -> 1(Yellow) -> 2(Green) -> 0...
-            p_shm->given_info.traffic_state.data = (current + 1) % 3; 
+            p_shm->given_info.traffic_state.sign_state = (current + 1) % 4; 
         }
 
         // --- [E] drive distance ---
@@ -95,7 +95,7 @@ int main()
                p_shm->given_info.vehicle_command.throttle,
                p_shm->given_info.vehicle_command.brake,
                p_shm->given_info.vehicle_command.steer_tire_degree,
-               p_shm->given_info.traffic_state.data,
+               p_shm->given_info.traffic_state.sign_state,
                p_shm->given_info.imu_accel.x_mps2,
                p_shm->given_info.imu_accel.y_mps2,
                p_shm->given_info.imu_accel.z_mps2,
