@@ -5,12 +5,15 @@
 
 #define MQ_TRAFFIC_SIGN_NAME "/traffic_sign_state"
 
-#define TRAFFIC_STATE_RED 0
-#define TRAFFIC_STATE_YELLOW 1
-#define TRAFFIC_STATE_GREEN 2
+enum {
+    TRAFFIC_STATE_NONE = 0,
+    TRAFFIC_STATE_RED,
+    TRAFFIC_STATE_YELLOW,
+    TRAFFIC_STATE_GREEN,
+};
 
 typedef struct {
-    uint32_t data;
+    uint8_t sign_state;
 } TrafficSignState;
 
 #endif // STRUCT_TRAFFIC_SIGN_H
