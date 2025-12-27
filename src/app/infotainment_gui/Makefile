@@ -1,16 +1,18 @@
 # 컴파일러
 CXX := g++
 
-# 컴파일 옵션
-CXXFLAGS := -std=c++17 -Wall -Wextra -O2 -I../../../resources/userdata/external $(shell pkg-config --cflags Qt6Widgets)
+# 공통 옵션
+INCLUDES := -I../../../resources/userdata/external -I../../bsw/ipc/inc -I../../bsw/ipc/lib
+CXXFLAGS := -std=c++17 -Wall -Wextra -O2 $(INCLUDES) $(shell pkg-config --cflags Qt6Widgets)
 LDFLAGS := $(shell pkg-config --libs Qt6Widgets)
+
 # 타겟 실행 파일 이름
 TARGET := app
 
 # 소스 파일
-SRCS := main.cpp UserData.cpp BaseData.cpp ImageData.cpp RenderingData.cpp InfotainmentWidget.cpp AppController.cpp
+SRCS := main.cpp UserData.cpp BaseData.cpp ImageData.cpp RenderingData.cpp InfotainmentWidget.cpp AppController.cpp ShmCompat.cpp
 
-# 오브젝트 파일 (.cpp -> .o)
+# 오브젝트 파일
 OBJS := $(SRCS:.cpp=.o)
 
 # 기본 타겟

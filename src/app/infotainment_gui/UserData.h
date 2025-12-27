@@ -11,6 +11,7 @@ public:
         RAPID_ACCELERATIONS,
         SHARP_TURNS,
         SIGNAL_VIOLATIONS,
+        
         MAX_SCORE_TYPES,
     };
 private:
@@ -28,6 +29,7 @@ public:
     bool saveToJsonFile(const std::string& path) const;
     uint16_t getUserTotalScore();
     void adjustUserTotalScore(int delta); // clamps to [0, uint16_max]
+    uint8_t adjustCurScore(ScoreType type, int delta); // clamps to [0, 255], returns new value
     uint8_t getCurScore(ScoreType type);
     const std::string& getUsername() const;
 };

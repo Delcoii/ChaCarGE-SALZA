@@ -3,6 +3,8 @@
 #include <QMetaObject>
 #include <chrono>
 #include <thread>
+#include <cmath>
+#include <limits>
 
 AppController::AppController(BaseData& base, RenderingData& rendering, InfotainmentWidget& uiWidget)
     : baseData(base), renderingData(rendering), ui(uiWidget) {}
@@ -10,10 +12,15 @@ AppController::AppController(BaseData& base, RenderingData& rendering, Infotainm
 AppController::~AppController() {
     stop();
     join();
+    if (shmPtr) {
+        detach_shared_memory(shmPtr);
+        shmPtr = nullptr;
+    }
 }
 
 void AppController::start() {
     running = true;
+    shmPtr = init_shared_memory();
     producerThread = std::thread(&AppController::producerLoop, this);
     rendererThread = std::thread(&AppController::rendererLoop, this);
 }
@@ -47,27 +54,40 @@ void AppController::loadAssets(ImageData& imageData) {
 }
 
 void AppController::producerLoop() {
-    uint8_t step = 0;
+    // Read from shared memory and update BaseData
     while (running) {
-        auto curDisplay = baseData.getCurDisplayType();
-        if (curDisplay == 4) break;
-
-        // If user toggled to ScoreBoard, keep producer idle to avoid overriding the view.
-        if (curDisplay == static_cast<uint8_t>(RenderingData::DisplayType::ScoreBoard)) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            continue;
+        if (!shmPtr) {
+            shmPtr = init_shared_memory();
+            if (!shmPtr) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                continue;
+            }
         }
 
-        uint8_t sign = static_cast<uint8_t>(ImageData::SignType::BUMP);
-        uint8_t warning = 0;
-        uint8_t emotion = static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
-        uint8_t display = static_cast<uint8_t>(RenderingData::DisplayType::Dashboard);
-        baseData.setFrameSignals(sign, warning, emotion, display);
-        if (step++ > 20) {
-            baseData.setFrameSignals(sign, warning, emotion, 4);
-            break;
+        // Traffic sign
+        uint8_t signSignal = static_cast<uint8_t>(shmPtr->given_info.traffic_state.data);
+
+        // Driving score
+        const DrivingScore& ds = shmPtr->generated_info.driving_score;
+        uint8_t warningSignal = ds.score_type;
+        int delta = static_cast<int>(std::llround(ds.total_score));
+
+        // Map score_type -> UserData::ScoreType
+        auto& ud = UserData::getInstance();
+        if (warningSignal < static_cast<uint8_t>(UserData::ScoreType::MAX_SCORE_TYPES)) {
+            auto st = static_cast<UserData::ScoreType>(warningSignal);
+            ud.adjustCurScore(st, delta);
         }
+        ud.adjustUserTotalScore(delta);
+
+        uint8_t emotionEncoded =
+            (delta < 0) ? static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE)
+                        : static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
+
+        baseData.setFrameSignals(signSignal, warningSignal, emotionEncoded, baseData.getCurDisplayType());
+
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        if (baseData.getCurDisplayType() == 4) break;
     }
 }
 

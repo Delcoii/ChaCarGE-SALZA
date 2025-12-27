@@ -9,7 +9,6 @@
 #include <QPainter>
 #include <QColor>
 #include <algorithm>
-#include <random>
 #include <QTimer>
 #include "UserData.h"
 
@@ -152,16 +151,6 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     initPayload.userTotalScore = BaseData::getInstance().getFrameDataCopy().userData.getUserTotalScore();
     applyImages(initPayload);
 
-    // Timers for side icon flash
-    flashTimer = new QTimer(this);
-    flashTimer->setInterval(6000); // every 6s
-    connect(flashTimer, &QTimer::timeout, this, &InfotainmentWidget::showRandomSide);
-    flashTimer->start();
-
-    hideTimer = new QTimer(this);
-    hideTimer->setInterval(3000); // hide after 3s
-    hideTimer->setSingleShot(true);
-    connect(hideTimer, &QTimer::timeout, this, &InfotainmentWidget::hideSides);
 }
 
 InfotainmentWidget::~InfotainmentWidget() = default;
@@ -237,9 +226,7 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     if (!happyGif) happyGif = imageData.getEmotionGif(ImageData::EmotionGifType::HAPPY);
     if (!badGif)   badGif   = imageData.getEmotionGif(ImageData::EmotionGifType::BAD_FACE);
 
-    if (warningActive && badGif) {
-        setGifMovie(badGif, gifSizePx);
-    } else if (happyGif) {
+    if (happyGif) {
         setGifMovie(happyGif, gifSizePx);
     } else if (centerPix) {
         setPixmapToLabel(gifLabel, centerPix, centerSize, centerSize, "Center?");
@@ -250,12 +237,20 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     // Warning image height matches GIF; width scales to keep square
     sideSizePx = gifSize;
     warningLabel->setFixedSize(sideSizePx, sideSizePx);
-    setPixmapToLabel(warningLabel, nullptr, sideSizePx, sideSizePx, "");
 
     updateDiamondGauge(payload.userTotalScore);
 
-    // hide all initially; flashing timer will show one
-    hideSides();
+    // set warning image based on payload (no periodic flashing)
+    if (payload.warningIcon) {
+        setPixmapToLabel(warningLabel, payload.warningIcon, sideSizePx, sideSizePx, "");
+        if (badGif) setGifMovie(badGif, gifSizePx);
+    } else {
+        if (warningEmpty.isNull()) {
+            warningEmpty = QPixmap(sideSizePx, sideSizePx);
+            warningEmpty.fill(Qt::transparent);
+        }
+        warningLabel->setPixmap(warningEmpty);
+    }
 
     // update score gauge only (no numeric text)
 }
@@ -335,35 +330,6 @@ void InfotainmentWidget::updateDiamondGauge(uint16_t score) {
         }
     }
     lastFilled = filled;
-}
-
-void InfotainmentWidget::showRandomSide() {
-    hideSides();
-    std::uniform_int_distribution<int> dist(0, 3);
-    const int pick = dist(rng);
-    switch (pick) {
-        case 0: setPixmapToLabel(warningLabel, bumpPix, sideSizePx, sideSizePx, ""); break;
-        case 1: setPixmapToLabel(warningLabel, regalPix, sideSizePx, sideSizePx, ""); break;
-        case 2: setPixmapToLabel(warningLabel, overPix, sideSizePx, sideSizePx, ""); break;
-        case 3: setPixmapToLabel(warningLabel, turnPix, sideSizePx, sideSizePx, ""); break;
-    }
-    // reduce user score by 5 each warning
-    UserData::getInstance().adjustUserTotalScore(-5);
-    updateDiamondGauge(UserData::getInstance().getUserTotalScore());
-
-    warningActive = true;
-    setGifMovie(badGif ? badGif : happyGif, gifSizePx);
-    hideTimer->start();
-}
-
-void InfotainmentWidget::hideSides() {
-    if (warningEmpty.isNull()) {
-        warningEmpty = QPixmap(sideSizePx, sideSizePx);
-        warningEmpty.fill(Qt::transparent);
-    }
-    warningLabel->setPixmap(warningEmpty);
-    warningActive = false;
-    setGifMovie(happyGif, gifSizePx);
 }
 
 void InfotainmentWidget::setGifMovie(QMovie* movie, int size) {
