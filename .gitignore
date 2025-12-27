@@ -16,5 +16,8 @@
 *.swp
 *.bak
 
+# Object files
+*.o
+
 # Eclipse metadata (if applicable)
 .metadata/
