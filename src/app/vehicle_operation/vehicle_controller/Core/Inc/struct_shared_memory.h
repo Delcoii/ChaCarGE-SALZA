@@ -23,7 +23,7 @@ typedef struct {
 
     // Vehicle Command Data
     VehicleCommand_t vehicle_command;
-
+    
 } SharedMemory_t;
 
 #endif // __STRUCT_SHARED_MEMORY_H__

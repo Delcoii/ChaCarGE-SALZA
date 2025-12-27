@@ -179,7 +179,7 @@ int main(void)
   TaskGetSteerADCHandle = osThreadCreate(osThread(TaskGetSteerADC), NULL);
 
   /* definition and creation of TaskVehicleCont */
-  osThreadDef(TaskVehicleCont, EntryVehicleControl, osPriorityNormal, 0, 128);
+  osThreadDef(TaskVehicleCont, EntryVehicleControl, osPriorityNormal, 0, 512);
   TaskVehicleContHandle = osThreadCreate(osThread(TaskVehicleCont), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -734,12 +734,11 @@ void EntryPrintResult(void const * argument)
     }
     
     if (event_bits & EVT_VEHICLE_COMMAND_UPDATED) {
-        str_len = snprintf(str, sizeof(str), "CMD: %f %f %f %d %d\r\n",
+        str_len = snprintf(str, sizeof(str), "CMD: %f %f %f[deg] %lu\r\n",
                           print_data.vehicle_command.throttle,
                           print_data.vehicle_command.brake,
                           print_data.vehicle_command.steer_tire_degree,
-                          print_data.vehicle_command.mode,
-                          print_data.vehicle_command.toggle);
+                          print_data.vehicle_command.steer_adc);
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
 
@@ -804,24 +803,27 @@ void EntryVehicleControl(void const * argument)
     osMutexRelease(vehicleDataMutexHandle);
 
     VehicleCommand_t command = PulseToVehicleCommand(vehicle_data.remote);
+    
     if (command.mode == MANUAL_MODE) {
       if (command.throttle >= 0.5) {
         MoveForward(command.throttle, arr);
       } else if (command.brake >= 0.5) {
         MoveBackward(command.brake, arr);
       } else {
-        StopMotor();
+        StopRearWheels();
       }
 
-      MoveSteer(command.steer_tire_degree, arr);
+      MoveSteer(command.steer_adc, vehicle_data.steer_adc, arr);
     }
     
     else if (command.mode == AUTO_MODE) {
-        StopMotor();       // need to fix (or another task)
+        StopRearWheels();       // need to fix (or another task)
+        StopSteer();
     }
     
     else if (command.mode == BRAKE_MODE || command.mode == ERROR_MODE) {
-        StopMotor();
+        StopRearWheels();
+        StopSteer();
     }
 
 

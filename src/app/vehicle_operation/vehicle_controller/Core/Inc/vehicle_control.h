@@ -1,6 +1,8 @@
 #ifndef __VEHICLE_CONTROL_H__
 #define __VEHICLE_CONTROL_H__
 
+#include <stdio.h> // for debugging, TODO : remove
+
 #include "main.h"
 #include "cmsis_os.h"
 
@@ -15,8 +17,11 @@
 #define MAX_STEER_TIRE_DEG      20.09
 #define MAX_THROTTLE            100.0
 
-#define KP                      0
-#define KI                      0
+#define STEER_ADC_RIGHT_FULL    510
+#define STEER_ADC_LEFT_FULL     1550
+
+#define KP                      4.5
+#define KI                      0.1
 #define KD                      0
 
 typedef enum {
@@ -34,10 +39,11 @@ double LinearMapping(double x, double in_min, double in_max, double out_min, dou
 VehicleCommand_t PulseToVehicleCommand(RemoteSignals_t remote);
 
 
-void StopMotor(void);
+void StopRearWheels(void);
+void StopSteer(void);
 void MoveForward(double pedal, uint32_t arr);
 void MoveBackward(double pedal, uint32_t arr);
-void MoveSteer(double steer_tire_deg, uint32_t arr);
+void MoveSteer(double cmd_steer_adc, double steer_adc, uint32_t arr);
 
 
 #endif // __VEHICLE_CONTROL_H__
