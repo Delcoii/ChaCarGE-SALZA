@@ -8,6 +8,7 @@
 #include "RenderingData.h"
 #include "InfotainmentWidget.h"
 #include "ImageData.h"
+#include "ShmCompat.h"
 
 class AppController {
 public:
@@ -31,6 +32,7 @@ private:
     std::thread producerThread;
     std::thread rendererThread;
     std::atomic<bool> running{false};
+    ShmIntegrated* shmPtr = nullptr;
 };
 
 #endif // APP_CONTROLLER_H

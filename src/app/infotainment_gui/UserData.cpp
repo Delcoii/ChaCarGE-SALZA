@@ -36,6 +36,15 @@ const std::string& UserData::getUsername() const {
     return username;
 }
 
+uint8_t UserData::adjustCurScore(ScoreType type, int delta) {
+    const auto idx = static_cast<uint8_t>(type);
+    int newVal = static_cast<int>(curScores[idx]) + delta;
+    if (newVal < 0) newVal = 0;
+    if (newVal > std::numeric_limits<uint8_t>::max()) newVal = std::numeric_limits<uint8_t>::max();
+    curScores[idx] = static_cast<uint8_t>(newVal);
+    return curScores[idx];
+}
+
 using json = nlohmann::json;
 
 namespace {
