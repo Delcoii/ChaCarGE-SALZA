@@ -27,6 +27,7 @@
 #include "remote_signal_processing.h"
 #include "steer_adc_processing.h"
 #include "vehicle_control.h"
+#include "CAN_DB_Interface.h"
 #include <math.h>
 #include <stdio.h>
 /* USER CODE END Includes */
@@ -133,6 +134,7 @@ void CAN_Send_Message(uint16_t stdId, char *str)
 /* USER CODE BEGIN 0 */
 // Shared Memory
 SharedMemory_t vehicle_data_shm_;
+SemaphoreHandle_t xVehicleDataMutex;
 /* USER CODE END 0 */
 
 /**
@@ -932,14 +934,55 @@ void EntryVehicleControl(void const * argument)
 void EntryCANTx(void const * argument)
 {
   /* USER CODE BEGIN EntryCANTx */
+  VehicleCommand_t local;
+  CAN_TxHeaderTypeDef txheader;
+  CAN_VEHICLE_COMMAND_t vehicle_frame;
+  uint32_t txmailbox;
+
+  txheader.StdId = CANID_VEHICLE_COMMAND;
+  txheader.IDE = CAN_ID_STD;
+  txheader.RTR = CAN_RTR_DATA;
+  txheader.DLC = 8;
+  txheader.TransmitGlobalTime = DISABLE;
+
   HAL_CAN_Start(&hcan1);
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
+
+  // Task Period
+  const TickType_t period = pdMS_TO_TICKS(20); // 50hz
+  TickType_t lastWakeTime = xTaskGetTickCount();
+
   /* Infinite loop */
   for(;;)
   {
-	HAL_GPIO_TogglePin(GPIOB,LD3_Pin);
-    CAN_Send_Message(0x123, "HI CAN");
-	osDelay(100);
+	// Periodic Wakeup
+	vTaskDelayUntil(&lastWakeTime, period);
+
+	// Shared Memory snapshot
+	if(xSemaphoreTake(vehicleDataMutexHandle, pdMS_TO_TICKS(2)) != pdTRUE){
+		continue;
+	}
+
+	local = vehicle_data_shm_.vehicle_command;
+	xSemaphoreGive(vehicleDataMutexHandle);
+
+	// CAN DB Packing
+	CAN_SetVehicleCommand(&vehicle_frame,
+			local.steer_tire_degree,
+			local.throttle,
+			local.brake);
+
+	if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0)
+	{
+		HAL_CAN_AddTxMessage(&hcan1, &txheader,
+				vehicle_frame.data,
+				&txmailbox);
+	}
+
+
+	//HAL_GPIO_TogglePin(GPIOB,LD3_Pin);
+    //AN_Send_Message(0x456, "HI CAN");
+	//osDelay(100);
 
   }
   /* USER CODE END EntryCANTx */
