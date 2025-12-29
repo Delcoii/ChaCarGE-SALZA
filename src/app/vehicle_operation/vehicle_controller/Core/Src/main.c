@@ -27,7 +27,10 @@
 #include "remote_signal_processing.h"
 #include "steer_adc_processing.h"
 #include "vehicle_control.h"
-
+#include "CAN_DB_Interface.h"
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,6 +56,8 @@ ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptor
 
 ADC_HandleTypeDef hadc1;
 
+CAN_HandleTypeDef hcan1;
+
 ETH_HandleTypeDef heth;
 
 TIM_HandleTypeDef htim1;
@@ -66,6 +71,7 @@ osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
 osThreadId TaskGetSteerADCHandle;
 osThreadId TaskVehicleContHandle;
+osThreadId TaskCANTxHandle;
 /* USER CODE BEGIN PV */
 osMutexId vehicleDataMutexHandle;
 EventGroupHandle_t eventGroupHandle; // FreeRTOS Event Group
@@ -80,19 +86,56 @@ static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_CAN1_Init(void);
 void EntryGetRemote(void const * argument);
 void EntryPrintResult(void const * argument);
 void EntryGetSteerADC(void const * argument);
 void EntryVehicleControl(void const * argument);
+void EntryCANTx(void const * argument);
 
 /* USER CODE BEGIN PFP */
+void CAN_Send_Message(uint16_t stdId, char *str)
+{
 
+	CAN_TxHeaderTypeDef txheader;
+	uint8_t txdata[8] = {0};
+	char str1[100];
+	uint32_t txmailbox;
+	int str_len = 0;
+
+	uint8_t len = strlen(str);
+	if (len > 8) len = 8;
+
+	txheader.StdId = stdId;
+	txheader.IDE = CAN_ID_STD;
+	txheader.RTR = CAN_RTR_DATA;
+	txheader.DLC = len;
+	txheader.TransmitGlobalTime = DISABLE;
+
+	memcpy(txdata, str, len);
+
+	HAL_StatusTypeDef ret = HAL_CAN_AddTxMessage(&hcan1, &txheader, txdata, &txmailbox);
+
+
+	if (ret == HAL_OK)
+	{
+		str_len = snprintf(str1, sizeof(str1), "[MCU-->APU]=0x%03X\r\n\n", stdId);
+		HAL_UART_Transmit(&huart3, (uint8_t*)str1, str_len, 100);
+	}
+	else
+	{
+		str_len = snprintf(str1, sizeof(str1), "CAN Tx Fail!!!\r\n\n", stdId);
+		HAL_UART_Transmit(&huart3, (uint8_t*)str1, str_len, 100);
+	}
+
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 // Shared Memory
 SharedMemory_t vehicle_data_shm_;
+SemaphoreHandle_t xVehicleDataMutex;
 /* USER CODE END 0 */
 
 /**
@@ -129,6 +172,7 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM1_Init();
   MX_ADC1_Init();
+  MX_CAN1_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -181,6 +225,10 @@ int main(void)
   /* definition and creation of TaskVehicleCont */
   osThreadDef(TaskVehicleCont, EntryVehicleControl, osPriorityNormal, 0, 512);
   TaskVehicleContHandle = osThreadCreate(osThread(TaskVehicleCont), NULL);
+
+  /* definition and creation of TaskCANTx */
+  osThreadDef(TaskCANTx, EntryCANTx, osPriorityNormal, 0, 512);
+  TaskCANTxHandle = osThreadCreate(osThread(TaskCANTx), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -296,6 +344,43 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief CAN1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CAN1_Init(void)
+{
+
+  /* USER CODE BEGIN CAN1_Init 0 */
+
+  /* USER CODE END CAN1_Init 0 */
+
+  /* USER CODE BEGIN CAN1_Init 1 */
+
+  /* USER CODE END CAN1_Init 1 */
+  hcan1.Instance = CAN1;
+  hcan1.Init.Prescaler = 6;
+  hcan1.Init.Mode = CAN_MODE_NORMAL;
+  hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_11TQ;
+  hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
+  hcan1.Init.TimeTriggeredMode = DISABLE;
+  hcan1.Init.AutoBusOff = DISABLE;
+  hcan1.Init.AutoWakeUp = DISABLE;
+  hcan1.Init.AutoRetransmission = DISABLE;
+  hcan1.Init.ReceiveFifoLocked = DISABLE;
+  hcan1.Init.TransmitFifoPriority = DISABLE;
+  if (HAL_CAN_Init(&hcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CAN1_Init 2 */
+
+  /* USER CODE END CAN1_Init 2 */
 
 }
 
@@ -838,6 +923,70 @@ void EntryVehicleControl(void const * argument)
     osDelay(10);   // 100 Hz
   }
   /* USER CODE END EntryVehicleControl */
+}
+
+/* USER CODE BEGIN Header_EntryCANTx */
+/**
+* @brief Function implementing the TaskCANTx thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_EntryCANTx */
+void EntryCANTx(void const * argument)
+{
+  /* USER CODE BEGIN EntryCANTx */
+  VehicleCommand_t local;
+  CAN_TxHeaderTypeDef txheader;
+  CAN_VEHICLE_COMMAND_t vehicle_frame;
+  uint32_t txmailbox;
+
+  txheader.StdId = CANID_VEHICLE_COMMAND;
+  txheader.IDE = CAN_ID_STD;
+  txheader.RTR = CAN_RTR_DATA;
+  txheader.DLC = 8;
+  txheader.TransmitGlobalTime = DISABLE;
+
+  HAL_CAN_Start(&hcan1);
+  HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
+
+  // Task Period
+  const TickType_t period = pdMS_TO_TICKS(20); // 50hz
+  TickType_t lastWakeTime = xTaskGetTickCount();
+
+  /* Infinite loop */
+  for(;;)
+  {
+	// Periodic Wakeup
+	vTaskDelayUntil(&lastWakeTime, period);
+
+	// Shared Memory snapshot
+	if(xSemaphoreTake(vehicleDataMutexHandle, pdMS_TO_TICKS(2)) != pdTRUE){
+		continue;
+	}
+
+	local = vehicle_data_shm_.vehicle_command;
+	xSemaphoreGive(vehicleDataMutexHandle);
+
+	// CAN DB Packing
+	CAN_SetVehicleCommand(&vehicle_frame,
+			local.steer_tire_degree,
+			local.throttle,
+			local.brake);
+
+	if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0)
+	{
+		HAL_CAN_AddTxMessage(&hcan1, &txheader,
+				vehicle_frame.data,
+				&txmailbox);
+	}
+
+
+	//HAL_GPIO_TogglePin(GPIOB,LD3_Pin);
+    //AN_Send_Message(0x456, "HI CAN");
+	//osDelay(100);
+
+  }
+  /* USER CODE END EntryCANTx */
 }
 
 /**
