@@ -7,8 +7,9 @@ CFLAGS 		= -Wall -g
 # paths
 # current directory : etc/test_data_generator
 # root directory    : ../../
-ROOT_DIR 	= ../..
+ROOT_DIR 	= ../../..
 IPC_DIR 	= $(ROOT_DIR)/src/bsw/ipc
+DSA_DIR     = $(ROOT_DIR)/src/app/driving_style_analyzer
 
 # include files directory and library directory
 INC_DIR 	= $(IPC_DIR)/inc
@@ -19,26 +20,22 @@ INCLUDES 	= -I$(INC_DIR) -I$(LIB_DIR)
 LIBS		= -lrt -lm
 
 # build target
-TARGET_GEN 		= generator
-TARGET_READ		= reader
+TARGET 		= analyzer
 
 # source files
 # 1) main source file
 # 2) shared memory library
-GEN_SRCS		= test_data_generator.c
-READ_SRCS		= test_data_reader.c
-SRCS			= $(LIB_DIR)/shm_functions.c
+SRCS		= analyzer.c \
+			  $(LIB_DIR)/shm_functions.c \
+			  $(DSA_DIR)/driving_score_calc.c
 
 # Rules of build
-all: $(TARGET_GEN) $(TARGET_READ)
+all: $(TARGET)
 
-$(TARGET_GEN): $(GEN_SRCS) $(SRCS)
+$(TARGET): $(SRCS)
 		$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
-		@echo "[Generator make file] Build completed: $(TARGET_GEN)"
+		@echo "[Analyzer make file] Build completed: $(TARGET)"
 
-$(TARGET_READ): $(READ_SRCS) $(SRCS)
-		$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
-		@echo "[Reader make file] Build completed: $(TARGET_READ)"
 clean:
-		rm -f $(TARGET_GEN) $(TARGET_READ)
-		@echo "[Generator make file] Clean completed."
+		rm -f $(TARGET)
+		@echo "[Analyzer make file] Clean completed."
