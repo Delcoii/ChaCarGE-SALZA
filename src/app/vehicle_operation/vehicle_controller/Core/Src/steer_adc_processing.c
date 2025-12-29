@@ -3,7 +3,7 @@
 osSemaphoreId steer_adc_sem_handle_;
 uint32_t adc_val;
 
-extern ADC_HandleTypeDef hadc1;
+extern ADC_HandleTypeDef hadc1;  // from main.c
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
     osSemaphoreRelease(steer_adc_sem_handle_);

@@ -28,9 +28,7 @@
 #include "steer_adc_processing.h"
 #include "vehicle_control.h"
 #include "CAN_DB_Interface.h"
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
+#include "myahrs_i2c.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -170,6 +168,10 @@ int main(void)
   // from steer_adc_processing.h
   osSemaphoreDef(steerAdcSem);
   steer_adc_sem_handle_ = osSemaphoreCreate(osSemaphore(steerAdcSem), 1);
+
+  // from myahrs_i2c.h
+  osSemaphoreDef(imuDataSem);
+  imu_data_sem_handle_ = osSemaphoreCreate(osSemaphore(imuDataSem), 1);
 
   // Create Event Group
   eventGroupHandle = xEventGroupCreate();
@@ -855,6 +857,14 @@ void EntryPrintResult(void const * argument)
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
 
+    if (event_bits & EVT_IMU_DATA_UPDATED_FOR_LOG) {
+        str_len = snprintf(str, sizeof(str), "IMU: %f[deg] %f[deg] %f[deg]\r\n",
+                          print_data.imu_data.roll_deg,
+                          print_data.imu_data.pitch_deg,
+                          print_data.imu_data.yaw_deg);
+        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+    }
+
     osDelay(100);
   }
   /* USER CODE END EntryPrintResult */
@@ -965,10 +975,81 @@ void EntryVehicleControl(void const * argument)
 void EntryCANTransmit(void const * argument)
 {
   /* USER CODE BEGIN EntryCANTransmit */
+  uint32_t txmailbox;
+  CAN_TxHeaderTypeDef txheader;
+  txheader.IDE = CAN_ID_STD;
+  txheader.RTR = CAN_RTR_DATA;
+  txheader.DLC = 8;
+  txheader.TransmitGlobalTime = DISABLE;
+
+  HAL_CAN_Start(&hcan1);
+  HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
+
+  EventBits_t event_bits;
+  SharedMemory_t vehicle_data;
+  VehicleCANFrame_t vehicle_can_dataframe;
+
   /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
+  for(;;) {
+    event_bits = xEventGroupWaitBits(
+      eventGroupHandle,
+      EVT_ALL_UPDATED_FOR_CAN, // uxBitsToWaitFor
+      pdTRUE,          // xClearOnExit:    Clear bits on exit (Auto-Reset)
+      pdFALSE,         // xWaitForAllBits: Wait for ANY bit (OR logic)
+      osWaitForever    // xBlockTime:      Block until event happens
+    );
+
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data = vehicle_data_shm_;
+    osMutexRelease(vehicleDataMutexHandle);
+
+    
+    if (event_bits & EVT_REMOTE_UPDATED_FOR_CAN) {
+      txheader.StdId = CANID_REMOTE_SIGNALS;
+      SetRemoteSignalsCANFrame(&vehicle_can_dataframe, vehicle_data);
+      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
+        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+      } else {
+        // fatal:transmit error!!
+        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      }
+    }
+
+
+    if (event_bits & EVT_STEER_ADC_UPDATED_FOR_CAN) {
+      txheader.StdId = CANID_STEER_ADC;
+      SetSteerADCCANFrame(&vehicle_can_dataframe, vehicle_data);
+      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
+        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+      } else {
+        // fatal:transmit error!!
+        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      }
+    }
+
+
+    if (event_bits & EVT_VEHICLE_COMMAND_UPDATED_FOR_CAN) {                           
+      txheader.StdId = CANID_VEHICLE_COMMAND1;
+      SetVehicleCommand1CANFrame(&vehicle_can_dataframe, vehicle_data);
+      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
+        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+      } else {
+        // fatal:transmit error!!
+        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      }
+
+      txheader.StdId = CANID_VEHICLE_COMMAND2;
+      SetVehicleCommand2CANFrame(&vehicle_can_dataframe, vehicle_data);
+      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
+        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+      } else {
+        // fatal:transmit error!!
+        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      }
+    }
+
+    HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+    osDelay(10);
   }
   /* USER CODE END EntryCANTransmit */
 }
@@ -983,10 +1064,33 @@ void EntryCANTransmit(void const * argument)
 void EntryGetIMU(void const * argument)
 {
   /* USER CODE BEGIN EntryGetIMU */
+  uint8_t who_am_i = 0;
+  if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_WHO_AM_I,
+                        I2C_MEMADD_SIZE_8BIT, &who_am_i, 1, 100) != HAL_OK) {
+    // int len = snprintf(uart_buf, sizeof(uart_buf), "myAHRS+ Found! ID: 0x%02X\r\n", who_am_i);
+    // HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);
+  } else {
+    // char* msg = "myAHRS+ NOT Found!\r\n";
+    // HAL_UART_Transmit(&huart3, (uint8_t*)msg, strlen(msg), 100);
+    HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+  }
+
+  // initial read
+  InitIMUData();
+  IMUData_t imu_data;
+
   /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
+  for(;;) {
+    imu_data = GetIMUData();  // This function waits for semaphore
+    
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data_shm_.imu_data = imu_data;
+    osMutexRelease(vehicleDataMutexHandle);
+
+    if (eventGroupHandle != NULL) {
+      xEventGroupSetBits(eventGroupHandle, EVT_IMU_DATA_UPDATED_FOR_LOG);
+      xEventGroupSetBits(eventGroupHandle, EVT_IMU_DATA_UPDATED_FOR_CAN);
+    }
   }
   /* USER CODE END EntryGetIMU */
 }
