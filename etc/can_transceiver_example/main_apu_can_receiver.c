@@ -99,8 +99,8 @@ static int init_can_socket(const char *ifname)
     return 0;
 }
 
-static inline int16_t le_i16(uint8_t lo, uint8_t hi)
-{
+
+static inline int16_t le_i16(uint8_t lo, uint8_t hi) {
     return (int16_t)((hi << 8) | lo);
 }
 
