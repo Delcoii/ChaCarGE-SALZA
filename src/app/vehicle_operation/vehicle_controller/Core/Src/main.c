@@ -766,9 +766,9 @@ void EntryGetRemote(void const * argument)
     osMutexRelease(vehicleDataMutexHandle);
 
     if (eventGroupHandle != NULL) {
-        xEventGroupSetBits(eventGroupHandle, EVT_REMOTE_UPDATED);
+        xEventGroupSetBits(eventGroupHandle, EVT_REMOTE_UPDATED_FOR_LOG);
+        xEventGroupSetBits(eventGroupHandle, EVT_REMOTE_UPDATED_FOR_CAN);
     }
-
   }
   /* USER CODE END 5 */
 }
@@ -786,15 +786,16 @@ void EntryPrintResult(void const * argument)
   SharedMemory_t print_data;
   char str[100];
   EventBits_t event_bits;
+  
 
   /* Infinite loop */
   for(;;) {
     event_bits = xEventGroupWaitBits(
       eventGroupHandle,
-      EVT_ALL_UPDATED, // Wait for ANY bit (OR logic)
-      pdTRUE,          // Clear bits on exit (Auto-Reset)
-      pdFALSE,         // Wait for ANY bit (OR logic)
-      osWaitForever    // Block until event happens
+      EVT_ALL_UPDATED_FOR_LOG, // uxBitsToWaitFor
+      pdTRUE,          // xClearOnExit:    Clear bits on exit (Auto-Reset)
+      pdFALSE,         // xWaitForAllBits: Wait for ANY bit (OR logic)
+      osWaitForever    // xBlockTime:      Block until event happens
     );
 
     // copy shared memory to local variable
@@ -804,7 +805,7 @@ void EntryPrintResult(void const * argument)
 
     // print remote signals
     int str_len = 0;
-    if (event_bits & EVT_REMOTE_UPDATED) {
+    if (event_bits & EVT_REMOTE_UPDATED_FOR_LOG) {
         str_len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
                           print_data.remote.steering_pulse_width_us,
                           print_data.remote.throttle_pulse_width_us,
@@ -813,12 +814,12 @@ void EntryPrintResult(void const * argument)
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
 
-    if (event_bits & EVT_STEER_ADC_UPDATED) {
+    if (event_bits & EVT_STEER_ADC_UPDATED_FOR_LOG) {
         str_len = snprintf(str, sizeof(str), "ADC: %lu\r\n", print_data.steer_adc);
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
     
-    if (event_bits & EVT_VEHICLE_COMMAND_UPDATED) {
+    if (event_bits & EVT_VEHICLE_COMMAND_UPDATED_FOR_LOG) {
         str_len = snprintf(str, sizeof(str), "CMD: %f %f %f[deg] %lu\r\n",
                           print_data.vehicle_command.throttle,
                           print_data.vehicle_command.brake,
@@ -856,7 +857,8 @@ void EntryGetSteerADC(void const * argument)
 
 
     if (eventGroupHandle != NULL) {
-        xEventGroupSetBits(eventGroupHandle, EVT_STEER_ADC_UPDATED);
+        xEventGroupSetBits(eventGroupHandle, EVT_STEER_ADC_UPDATED_FOR_LOG);
+        xEventGroupSetBits(eventGroupHandle, EVT_STEER_ADC_UPDATED_FOR_CAN);
     }
     osDelay(10); // Prevent CPU hogging
   }
@@ -918,7 +920,8 @@ void EntryVehicleControl(void const * argument)
 
 
     if (eventGroupHandle != NULL) {
-        xEventGroupSetBits(eventGroupHandle, EVT_VEHICLE_COMMAND_UPDATED);
+        xEventGroupSetBits(eventGroupHandle, EVT_VEHICLE_COMMAND_UPDATED_FOR_LOG);
+        xEventGroupSetBits(eventGroupHandle, EVT_VEHICLE_COMMAND_UPDATED_FOR_CAN);
     }
     osDelay(10);   // 100 Hz
   }
@@ -935,12 +938,9 @@ void EntryVehicleControl(void const * argument)
 void EntryCANTx(void const * argument)
 {
   /* USER CODE BEGIN EntryCANTx */
-  VehicleCommand_t local;
-  CAN_TxHeaderTypeDef txheader;
-  CAN_VEHICLE_COMMAND_t vehicle_frame;
+  
   uint32_t txmailbox;
-
-  txheader.StdId = CANID_VEHICLE_COMMAND;
+  CAN_TxHeaderTypeDef txheader;
   txheader.IDE = CAN_ID_STD;
   txheader.RTR = CAN_RTR_DATA;
   txheader.DLC = 8;
@@ -949,42 +949,59 @@ void EntryCANTx(void const * argument)
   HAL_CAN_Start(&hcan1);
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
-  // Task Period
-  const TickType_t period = pdMS_TO_TICKS(20); // 50hz
-  TickType_t lastWakeTime = xTaskGetTickCount();
+  EventBits_t event_bits;
+  SharedMemory_t vehicle_data;
+  VehicleCANFrame_t vehicle_can_dataframe;
 
   /* Infinite loop */
-  for(;;)
-  {
-	// Periodic Wakeup
-	vTaskDelayUntil(&lastWakeTime, period);
+  for(;;) {
+    event_bits = xEventGroupWaitBits(
+      eventGroupHandle,
+      EVT_ALL_UPDATED_FOR_CAN, // uxBitsToWaitFor
+      pdTRUE,          // xClearOnExit:    Clear bits on exit (Auto-Reset)
+      pdFALSE,         // xWaitForAllBits: Wait for ANY bit (OR logic)
+      osWaitForever    // xBlockTime:      Block until event happens
+    );
 
-	// Shared Memory snapshot
-	if(xSemaphoreTake(vehicleDataMutexHandle, pdMS_TO_TICKS(2)) != pdTRUE){
-		continue;
-	}
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data = vehicle_data_shm_;
+    osMutexRelease(vehicleDataMutexHandle);
 
-	local = vehicle_data_shm_.vehicle_command;
-	xSemaphoreGive(vehicleDataMutexHandle);
+    if (event_bits & EVT_REMOTE_UPDATED_FOR_CAN) {
+      txheader.StdId = CANID_REMOTE_SIGNALS;
+      SetRemoteSignalsCANFrame(&vehicle_can_dataframe, vehicle_data);
+      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
+        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+      } else {
+        // fatal:transmit error!!
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      }
+    }
 
-	// CAN DB Packing
-	CAN_SetVehicleCommand(&vehicle_frame,
-			local.steer_tire_degree,
-			local.throttle,
-			local.brake);
+    if (event_bits & EVT_VEHICLE_COMMAND_UPDATED_FOR_CAN) {                           
+      txheader.StdId = CANID_VEHICLE_COMMAND1;
+      SetVehicleCommand1CANFrame(&vehicle_can_dataframe, vehicle_data);
+      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
+        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+      } else {
+        // fatal:transmit error!!
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      }
 
-	if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0)
-	{
-		HAL_CAN_AddTxMessage(&hcan1, &txheader,
-				vehicle_frame.data,
-				&txmailbox);
-	}
+      txheader.StdId = CANID_VEHICLE_COMMAND2;
+      SetVehicleCommand2CANFrame(&vehicle_can_dataframe, vehicle_data);
+      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
+        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+      } else {
+        // fatal:transmit error!!
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      }
+    }
 
 
-	//HAL_GPIO_TogglePin(GPIOB,LD3_Pin);
-    //AN_Send_Message(0x456, "HI CAN");
-	//osDelay(100);
 
+    HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+    osDelay(10);
   }
   /* USER CODE END EntryCANTx */
 }
