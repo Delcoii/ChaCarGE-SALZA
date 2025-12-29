@@ -6,13 +6,28 @@
 #include "struct_vehicle_command.h"
 
 // Event Group Flags
-#define EVT_REMOTE_UPDATED (1 << 0)             // 0x01
-#define EVT_STEER_ADC_UPDATED (1 << 1)          // 0x02
-#define EVT_VEHICLE_COMMAND_UPDATED (1 << 2)    // 0x04
-// IMU Event update data
-#define EVT_ALL_UPDATED    (EVT_REMOTE_UPDATED | \
-                            EVT_STEER_ADC_UPDATED | \
-                            EVT_VEHICLE_COMMAND_UPDATED)
+#define EVT_REMOTE_UPDATED_FOR_LOG      (1 << 0)        // 0x01
+#define EVT_REMOTE_UPDATED_FOR_CAN      (1 << 1)        // 0x02
+#define EVT_STEER_ADC_UPDATED_FOR_LOG   (1 << 2)        // 0x04
+#define EVT_STEER_ADC_UPDATED_FOR_CAN   (1 << 3)        // 0x08
+#define EVT_VEHICLE_COMMAND_UPDATED_FOR_LOG (1 << 4)    // 0x08
+#define EVT_VEHICLE_COMMAND_UPDATED_FOR_CAN (1 << 5)    // 0x10
+
+
+// Event Group Flags for Log
+#define EVT_ALL_UPDATED_FOR_LOG    (EVT_REMOTE_UPDATED_FOR_LOG | \
+                                    EVT_STEER_ADC_UPDATED_FOR_LOG | \
+                                    EVT_VEHICLE_COMMAND_UPDATED_FOR_LOG)
+
+// Event Group Flags for CAN
+#define EVT_ALL_UPDATED_FOR_CAN    (EVT_REMOTE_UPDATED_FOR_CAN | \
+                                    EVT_STEER_ADC_UPDATED_FOR_CAN | \
+                                    EVT_VEHICLE_COMMAND_UPDATED_FOR_CAN)
+
+
+#define EVT_ALL_UPDATED    (EVT_ALL_UPDATED_FOR_LOG | \
+                            EVT_ALL_UPDATED_FOR_CAN)
+
 
 
 typedef struct {
