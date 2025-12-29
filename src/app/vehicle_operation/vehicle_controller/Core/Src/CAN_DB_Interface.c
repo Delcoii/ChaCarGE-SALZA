@@ -6,6 +6,7 @@
  */
 
 #include "CAN_DB_Interface.h"
+#include <stdio.h>
 #include <string.h>
 
 void CAN_SetVehicleCommand(CAN_VEHICLE_COMMAND_t *frame, double steer_deg, double accel_per, double brake_per)
@@ -34,5 +35,6 @@ void CAN_SetIMUData(CAN_IMU_DATA_t *frame, double ax, double ay, double az)
 	frame->RAW.az_raw = clamp_int16((int32_t)(az * 100.0));
 
 		// frame->RAW.remote_steer_us is set by the caller (TaskCANTX)
-
 }
+
+

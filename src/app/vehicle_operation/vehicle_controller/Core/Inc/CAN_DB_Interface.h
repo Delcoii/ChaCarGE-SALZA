@@ -68,7 +68,7 @@ typedef union {
 #pragma pack(pop)
 
 
-// Saturation Function(Vehicle_command,IMU)
+// Saturation Function(Vehicle_command, IMU)
 static inline int16_t clamp_int16(int32_t v)
 {
     if (v > 32767)  return 32767;
@@ -90,6 +90,7 @@ void CAN_SetIMUData(CAN_IMU_DATA_t *frame, double ax, double ay, double az);
 void CAN_SetADCData(CAN_ADC_DATA_t *frame, double voltage);
 
 
-
+// CAN Send Message
+void CAN_Send_Message(uint16_t stdId, char *str);
 
 #endif /* __CAN_DB_INTERFACE_H_ */

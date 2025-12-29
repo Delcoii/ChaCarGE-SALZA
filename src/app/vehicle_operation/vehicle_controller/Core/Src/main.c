@@ -30,6 +30,7 @@
 #include "CAN_DB_Interface.h"
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
