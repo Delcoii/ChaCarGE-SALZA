@@ -60,6 +60,8 @@ CAN_HandleTypeDef hcan1;
 
 ETH_HandleTypeDef heth;
 
+I2C_HandleTypeDef hi2c1;
+
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 
@@ -75,6 +77,11 @@ osThreadId TaskCANTxHandle;
 /* USER CODE BEGIN PV */
 osMutexId vehicleDataMutexHandle;
 EventGroupHandle_t eventGroupHandle; // FreeRTOS Event Group
+
+// Shared Memory
+SharedMemory_t vehicle_data_shm_;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -87,6 +94,7 @@ static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_CAN1_Init(void);
+static void MX_I2C1_Init(void);
 void EntryGetRemote(void const * argument);
 void EntryPrintResult(void const * argument);
 void EntryGetSteerADC(void const * argument);
@@ -94,48 +102,12 @@ void EntryVehicleControl(void const * argument);
 void EntryCANTx(void const * argument);
 
 /* USER CODE BEGIN PFP */
-void CAN_Send_Message(uint16_t stdId, char *str)
-{
 
-	CAN_TxHeaderTypeDef txheader;
-	uint8_t txdata[8] = {0};
-	char str1[100];
-	uint32_t txmailbox;
-	int str_len = 0;
-
-	uint8_t len = strlen(str);
-	if (len > 8) len = 8;
-
-	txheader.StdId = stdId;
-	txheader.IDE = CAN_ID_STD;
-	txheader.RTR = CAN_RTR_DATA;
-	txheader.DLC = len;
-	txheader.TransmitGlobalTime = DISABLE;
-
-	memcpy(txdata, str, len);
-
-	HAL_StatusTypeDef ret = HAL_CAN_AddTxMessage(&hcan1, &txheader, txdata, &txmailbox);
-
-
-	if (ret == HAL_OK)
-	{
-		str_len = snprintf(str1, sizeof(str1), "[MCU-->APU]=0x%03X\r\n\n", stdId);
-		HAL_UART_Transmit(&huart3, (uint8_t*)str1, str_len, 100);
-	}
-	else
-	{
-		str_len = snprintf(str1, sizeof(str1), "CAN Tx Fail!!!\r\n\n", stdId);
-		HAL_UART_Transmit(&huart3, (uint8_t*)str1, str_len, 100);
-	}
-
-}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-// Shared Memory
-SharedMemory_t vehicle_data_shm_;
-SemaphoreHandle_t xVehicleDataMutex;
+
 /* USER CODE END 0 */
 
 /**
@@ -173,6 +145,7 @@ int main(void)
   MX_TIM1_Init();
   MX_ADC1_Init();
   MX_CAN1_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -430,6 +403,54 @@ static void MX_ETH_Init(void)
   /* USER CODE BEGIN ETH_Init 2 */
 
   /* USER CODE END ETH_Init 2 */
+
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
 
 }
 
@@ -815,7 +836,7 @@ void EntryPrintResult(void const * argument)
     }
 
     if (event_bits & EVT_STEER_ADC_UPDATED_FOR_LOG) {
-        str_len = snprintf(str, sizeof(str), "ADC: %lu\r\n", print_data.steer_adc);
+        str_len = snprintf(str, sizeof(str), "ADC: %d\r\n", print_data.steer_adc);
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
     
