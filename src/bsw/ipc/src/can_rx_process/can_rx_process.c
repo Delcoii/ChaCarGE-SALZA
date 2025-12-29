@@ -81,6 +81,10 @@ int main() {
         if (!(frame.can_id & CAN_EFF_FLAG)) {
             check_id &= CAN_SFF_MASK;
         }
+        // printf("RX ID: 0x%X, Data: %02X %02X %02X %02X %02X %02X %02X %02X\n", 
+        //        check_id, 
+        //        frame.data[0], frame.data[1], frame.data[2], frame.data[3],
+        //        frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
 
         // TODO : mutex?
         switch (check_id) {
@@ -111,7 +115,7 @@ int main() {
 
         // updating time
         time_step += 0.1;
-        usleep(100000); // 100ms (10Hz)
+        // usleep(100000); // 100ms (10Hz)
     }
 
     // 4. shutdown processing
@@ -151,15 +155,15 @@ static int init_can_socket(const char *ifname) {
         return -1;
     }
 
-    struct can_filter rfilter[4];
+    struct can_filter rfilter[3];
     rfilter[0].can_id   = CANID_VEHICLE_COMMAND1;
     rfilter[0].can_mask = CAN_SFF_MASK;  // 11-bit
     
     rfilter[1].can_id   = CANID_VEHICLE_COMMAND2;
     rfilter[1].can_mask = CAN_SFF_MASK;
 
-    rfilter[3].can_id   = CANID_IMU_DATA;
-    rfilter[3].can_mask = CAN_SFF_MASK;
+    rfilter[2].can_id   = CANID_IMU_DATA;
+    rfilter[2].can_mask = CAN_SFF_MASK;
 
     if (setsockopt(can_socket, SOL_CAN_RAW, CAN_RAW_FILTER,
                    &rfilter, sizeof(rfilter)) < 0) {
