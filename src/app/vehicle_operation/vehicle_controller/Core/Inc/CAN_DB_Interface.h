@@ -19,7 +19,7 @@
 
 #define CANID_REMOTE_SIGNALS	0x160
 
-
+#define CANID_STEER_ADC		    0x170
 
 #define CANID_IMU_DATA			0x507
 //#define CANID_ADC_DATA			0x444	// Test ADC Message
@@ -50,7 +50,7 @@ typedef union{
 	} VehicleCommand2Frame_t;
 
 	struct {
-		uint16_t aaaaaaa; 
+		uint16_t data; 
 		uint8_t reserved[4];
 	} ADCFrame_t;
 
@@ -60,8 +60,9 @@ typedef union{
 
 
 // Scaling Convert Function
-void SetRemoteSignalsCANFrame(VehicleCANFrame_t *frame, SharedMemory_t shared_memory);
-void SetVehicleCommand1CANFrame(VehicleCANFrame_t *frame, SharedMemory_t shared_memory);
-void SetVehicleCommand2CANFrame(VehicleCANFrame_t *frame, SharedMemory_t shared_memory);
+void SetRemoteSignalsCANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
+void SetSteerADCCANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
+void SetVehicleCommand1CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
+void SetVehicleCommand2CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
 
 #endif // __CAN_DB_INTERFACE_H__

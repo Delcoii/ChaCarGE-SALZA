@@ -10,44 +10,50 @@
 #include <string.h>
 
 
-void SetRemoteSignalsCANFrame(VehicleCANFrame_t *frame, SharedMemory_t shared_memory) {
+void SetRemoteSignalsCANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory) {
 	// clear all 8 bytes to avoid sending data
-	memset(frame->data, 0 , sizeof(frame->data));
+	memset(p_frame->data, 0 , sizeof(p_frame->data));
 
-	frame->RemoteSignalsFrame_t.steering_pulse_width_us
+	p_frame->RemoteSignalsFrame_t.steering_pulse_width_us
 		= (uint16_t)(shared_memory.remote.steering_pulse_width_us);
-	frame->RemoteSignalsFrame_t.throttle_pulse_width_us
+	p_frame->RemoteSignalsFrame_t.throttle_pulse_width_us
 	    = (uint16_t)(shared_memory.remote.throttle_pulse_width_us);
-	frame->RemoteSignalsFrame_t.toggle_pulse_width_us
+	p_frame->RemoteSignalsFrame_t.toggle_pulse_width_us
 	    = (uint16_t)(shared_memory.remote.toggle_pulse_width_us);
-	frame->RemoteSignalsFrame_t.mode_pulse_width_us
+	p_frame->RemoteSignalsFrame_t.mode_pulse_width_us
 	    = (uint16_t)(shared_memory.remote.mode_pulse_width_us);
 }
 
-
-
-void SetVehicleCommand1CANFrame(VehicleCANFrame_t *frame, SharedMemory_t shared_memory) {
+void SetSteerADCCANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory) {
 	// clear all 8 bytes to avoid sending data
-	memset(frame->data, 0 , sizeof(frame->data));
+	memset(p_frame->data, 0 , sizeof(p_frame->data));
 
-	frame->VehicleCommand1Frame_t.throttle
+	p_frame->ADCFrame_t.data = (uint16_t)(shared_memory.steer_adc);
+}
+
+
+void SetVehicleCommand1CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory) {
+	// clear all 8 bytes to avoid sending data
+	memset(p_frame->data, 0 , sizeof(p_frame->data));
+
+	p_frame->VehicleCommand1Frame_t.throttle
 		= (uint16_t)(shared_memory.vehicle_command.throttle * 100 + 0.5);
 
-	frame->VehicleCommand1Frame_t.brake
+	p_frame->VehicleCommand1Frame_t.brake
 		= (uint16_t)(shared_memory.vehicle_command.brake * 100 + 0.5);
 
-	frame->VehicleCommand1Frame_t.steer_tire_degree
+	p_frame->VehicleCommand1Frame_t.steer_tire_degree
 		= (uint16_t)(shared_memory.vehicle_command.steer_tire_degree * 100 + 0.5);
 
-	frame->VehicleCommand1Frame_t.steer_adc = (uint16_t)(shared_memory.vehicle_command.steer_adc);
+	p_frame->VehicleCommand1Frame_t.steer_adc = (uint16_t)(shared_memory.vehicle_command.steer_adc);
 }
 
 
 
-void SetVehicleCommand2CANFrame(VehicleCANFrame_t *frame, SharedMemory_t shared_memory) {
+void SetVehicleCommand2CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory) {
 	// clear all 8 bytes to avoid sending data
-	memset(frame->data, 0 , sizeof(frame->data));
+	memset(p_frame->data, 0 , sizeof(p_frame->data));
 
-	frame->VehicleCommand2Frame_t.mode = (uint8_t)(shared_memory.vehicle_command.mode);
-	frame->VehicleCommand2Frame_t.toggle = (uint8_t)(shared_memory.vehicle_command.toggle);
+	p_frame->VehicleCommand2Frame_t.mode = (uint8_t)(shared_memory.vehicle_command.mode);
+	p_frame->VehicleCommand2Frame_t.toggle = (uint8_t)(shared_memory.vehicle_command.toggle);
 }

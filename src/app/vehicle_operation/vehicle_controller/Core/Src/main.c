@@ -967,6 +967,7 @@ void EntryCANTx(void const * argument)
     vehicle_data = vehicle_data_shm_;
     osMutexRelease(vehicleDataMutexHandle);
 
+    
     if (event_bits & EVT_REMOTE_UPDATED_FOR_CAN) {
       txheader.StdId = CANID_REMOTE_SIGNALS;
       SetRemoteSignalsCANFrame(&vehicle_can_dataframe, vehicle_data);
@@ -977,6 +978,19 @@ void EntryCANTx(void const * argument)
         HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
       }
     }
+
+
+    if (event_bits & EVT_STEER_ADC_UPDATED_FOR_CAN) {
+      txheader.StdId = CANID_STEER_ADC;
+      SetSteerADCCANFrame(&vehicle_can_dataframe, vehicle_data);
+      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
+        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+      } else {
+        // fatal:transmit error!!
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      }
+    }
+
 
     if (event_bits & EVT_VEHICLE_COMMAND_UPDATED_FOR_CAN) {                           
       txheader.StdId = CANID_VEHICLE_COMMAND1;
@@ -997,8 +1011,6 @@ void EntryCANTx(void const * argument)
         HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
       }
     }
-
-
 
     HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
     osDelay(10);
