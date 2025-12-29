@@ -73,7 +73,8 @@ osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
 osThreadId TaskGetSteerADCHandle;
 osThreadId TaskVehicleContHandle;
-osThreadId TaskCANTxHandle;
+osThreadId TaskCANTransmitHandle;
+osThreadId TaskGetIMUHandle;
 /* USER CODE BEGIN PV */
 osMutexId vehicleDataMutexHandle;
 EventGroupHandle_t eventGroupHandle; // FreeRTOS Event Group
@@ -99,7 +100,8 @@ void EntryGetRemote(void const * argument);
 void EntryPrintResult(void const * argument);
 void EntryGetSteerADC(void const * argument);
 void EntryVehicleControl(void const * argument);
-void EntryCANTx(void const * argument);
+void EntryCANTransmit(void const * argument);
+void EntryGetIMU(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -196,12 +198,16 @@ int main(void)
   TaskGetSteerADCHandle = osThreadCreate(osThread(TaskGetSteerADC), NULL);
 
   /* definition and creation of TaskVehicleCont */
-  osThreadDef(TaskVehicleCont, EntryVehicleControl, osPriorityNormal, 0, 512);
+  osThreadDef(TaskVehicleCont, EntryVehicleControl, osPriorityNormal, 0, 128);
   TaskVehicleContHandle = osThreadCreate(osThread(TaskVehicleCont), NULL);
 
-  /* definition and creation of TaskCANTx */
-  osThreadDef(TaskCANTx, EntryCANTx, osPriorityNormal, 0, 512);
-  TaskCANTxHandle = osThreadCreate(osThread(TaskCANTx), NULL);
+  /* definition and creation of TaskCANTransmit */
+  osThreadDef(TaskCANTransmit, EntryCANTransmit, osPriorityNormal, 0, 512);
+  TaskCANTransmitHandle = osThreadCreate(osThread(TaskCANTransmit), NULL);
+
+  /* definition and creation of TaskGetIMU */
+  osThreadDef(TaskGetIMU, EntryGetIMU, osPriorityNormal, 0, 128);
+  TaskGetIMUHandle = osThreadCreate(osThread(TaskGetIMU), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -949,94 +955,40 @@ void EntryVehicleControl(void const * argument)
   /* USER CODE END EntryVehicleControl */
 }
 
-/* USER CODE BEGIN Header_EntryCANTx */
+/* USER CODE BEGIN Header_EntryCANTransmit */
 /**
-* @brief Function implementing the TaskCANTx thread.
+* @brief Function implementing the TaskCANTransmit thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_EntryCANTx */
-void EntryCANTx(void const * argument)
+/* USER CODE END Header_EntryCANTransmit */
+void EntryCANTransmit(void const * argument)
 {
-  /* USER CODE BEGIN EntryCANTx */
-  
-  uint32_t txmailbox;
-  CAN_TxHeaderTypeDef txheader;
-  txheader.IDE = CAN_ID_STD;
-  txheader.RTR = CAN_RTR_DATA;
-  txheader.DLC = 8;
-  txheader.TransmitGlobalTime = DISABLE;
-
-  HAL_CAN_Start(&hcan1);
-  HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
-
-  EventBits_t event_bits;
-  SharedMemory_t vehicle_data;
-  VehicleCANFrame_t vehicle_can_dataframe;
-
+  /* USER CODE BEGIN EntryCANTransmit */
   /* Infinite loop */
-  for(;;) {
-    event_bits = xEventGroupWaitBits(
-      eventGroupHandle,
-      EVT_ALL_UPDATED_FOR_CAN, // uxBitsToWaitFor
-      pdTRUE,          // xClearOnExit:    Clear bits on exit (Auto-Reset)
-      pdFALSE,         // xWaitForAllBits: Wait for ANY bit (OR logic)
-      osWaitForever    // xBlockTime:      Block until event happens
-    );
-
-    osMutexWait(vehicleDataMutexHandle, osWaitForever);
-    vehicle_data = vehicle_data_shm_;
-    osMutexRelease(vehicleDataMutexHandle);
-
-    
-    if (event_bits & EVT_REMOTE_UPDATED_FOR_CAN) {
-      txheader.StdId = CANID_REMOTE_SIGNALS;
-      SetRemoteSignalsCANFrame(&vehicle_can_dataframe, vehicle_data);
-      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
-        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
-      } else {
-        // fatal:transmit error!!
-        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-      }
-    }
-
-
-    if (event_bits & EVT_STEER_ADC_UPDATED_FOR_CAN) {
-      txheader.StdId = CANID_STEER_ADC;
-      SetSteerADCCANFrame(&vehicle_can_dataframe, vehicle_data);
-      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
-        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
-      } else {
-        // fatal:transmit error!!
-        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-      }
-    }
-
-
-    if (event_bits & EVT_VEHICLE_COMMAND_UPDATED_FOR_CAN) {                           
-      txheader.StdId = CANID_VEHICLE_COMMAND1;
-      SetVehicleCommand1CANFrame(&vehicle_can_dataframe, vehicle_data);
-      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
-        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
-      } else {
-        // fatal:transmit error!!
-        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-      }
-
-      txheader.StdId = CANID_VEHICLE_COMMAND2;
-      SetVehicleCommand2CANFrame(&vehicle_can_dataframe, vehicle_data);
-      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
-        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
-      } else {
-        // fatal:transmit error!!
-        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-      }
-    }
-
-    HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-    osDelay(10);
+  for(;;)
+  {
+    osDelay(1);
   }
-  /* USER CODE END EntryCANTx */
+  /* USER CODE END EntryCANTransmit */
+}
+
+/* USER CODE BEGIN Header_EntryGetIMU */
+/**
+* @brief Function implementing the TaskGetIMU thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_EntryGetIMU */
+void EntryGetIMU(void const * argument)
+{
+  /* USER CODE BEGIN EntryGetIMU */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END EntryGetIMU */
 }
 
 /**
