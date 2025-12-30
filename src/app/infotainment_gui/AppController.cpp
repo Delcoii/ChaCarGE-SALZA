@@ -1,6 +1,7 @@
 #include "AppController.h"
 
 #include <QMetaObject>
+#include <QDir>
 #include <chrono>
 #include <thread>
 #include <cmath>
@@ -36,21 +37,26 @@ void AppController::join() {
     if (rendererThread.joinable()) rendererThread.join();
 }
 
-void AppController::loadAssets(ImageData& imageData) {
-    const QString base = "../../../resources/images/";
-    imageData.loadDefaultImage(ImageData::DefaultImageType::MENU_ICON_1, base + "button.png");
-    imageData.loadDefaultImage(ImageData::DefaultImageType::SIGNAL_CORNER, base + "Signal.png");
-    imageData.loadSignImage(ImageData::SignType::BUMP, base + "bump.png");
-    imageData.loadSignImage(ImageData::SignType::OVERSPEED, base + "overspeed.png");
-    imageData.loadSignImage(ImageData::SignType::OVERTURN, base + "turn.png");
-    imageData.loadSignImage(ImageData::SignType::SIGNAL_VIOLATION, base + "regalSignal.png");
-    imageData.loadEmotionGif(ImageData::EmotionGifType::HAPPY, base + "thumbs-up-2584.gif", 150);
-    imageData.loadEmotionGif(ImageData::EmotionGifType::BAD_FACE, base + "bad_face.gif", 150);
-    imageData.loadTierImage(ImageData::TierType::BRONZE, base + "bronze.png");
-    imageData.loadTierImage(ImageData::TierType::SILVER, base + "silver.png");
-    imageData.loadTierImage(ImageData::TierType::GOLD, base + "gold.png");
-    imageData.loadTierImage(ImageData::TierType::DIAMOND, base + "diamond.png");
-    imageData.loadTierImage(ImageData::TierType::MASTER, base + "master.png");
+void AppController::loadAssets(ImageData& imageData, const QString& assetBasePath) {
+    QDir base(assetBasePath);
+    const auto path = [&](const QString& file) { return base.filePath(file); };
+
+    imageData.loadDefaultImage(ImageData::DefaultImageType::MENU_ICON_1, path("button.png"));
+    imageData.loadDefaultImage(ImageData::DefaultImageType::SIGNAL_CORNER, path("Signal.png"));
+    imageData.loadSignImage(ImageData::SignType::TRAFFIC_RED, path("signal_red.png"));
+    imageData.loadSignImage(ImageData::SignType::TRAFFIC_YELLOW, path("signal_yellow.png"));
+    imageData.loadSignImage(ImageData::SignType::TRAFFIC_GREEN, path("signal_green.png"));
+    imageData.loadSignImage(ImageData::SignType::BUMP, path("bump.png"));
+    imageData.loadSignImage(ImageData::SignType::OVERSPEED, path("overspeed.png"));
+    imageData.loadSignImage(ImageData::SignType::OVERTURN, path("turn.png"));
+    imageData.loadSignImage(ImageData::SignType::SIGNAL_VIOLATION, path("regalSignal.png"));
+    imageData.loadEmotionGif(ImageData::EmotionGifType::HAPPY, path("thumbs-up-2584.gif"), 150);
+    imageData.loadEmotionGif(ImageData::EmotionGifType::BAD_FACE, path("bad_face.gif"), 150);
+    imageData.loadTierImage(ImageData::TierType::BRONZE, path("bronze.png"));
+    imageData.loadTierImage(ImageData::TierType::SILVER, path("silver.png"));
+    imageData.loadTierImage(ImageData::TierType::GOLD, path("gold.png"));
+    imageData.loadTierImage(ImageData::TierType::DIAMOND, path("diamond.png"));
+    imageData.loadTierImage(ImageData::TierType::MASTER, path("master.png"));
 }
 
 void AppController::producerLoop() {
@@ -65,7 +71,7 @@ void AppController::producerLoop() {
         }
 
         // Traffic sign
-        uint8_t signSignal = static_cast<uint8_t>(shmPtr->given_info.traffic_state.data);
+        uint8_t signSignal = static_cast<uint8_t>(shmPtr->given_info.traffic_state.sign_state);
 
         // Driving score
         const DrivingScore& ds = shmPtr->generated_info.driving_score;

@@ -51,7 +51,7 @@ namespace {
     constexpr size_t kScoreCount =
         static_cast<size_t>(UserData::ScoreType::MAX_SCORE_TYPES);
 
-    // JSON key <-> enum index 매핑 (네 JSON 포맷 기준)
+    // Map JSON keys to enum indices (per the existing JSON format)
     constexpr const char* kScoreKeys[kScoreCount] = {
         "SPEED_BUMPS",
         "RAPID_ACCELERATIONS",
@@ -88,11 +88,11 @@ bool UserData::saveToJsonFile(const std::string& path) const {
 
 bool UserData::loadFromJsonFile(const std::string& path)
 {
-    // 1) 파일 열기
+    // 1) Open file
     std::ifstream ifs(path);
     if (!ifs.is_open()) return false;
 
-    // 2) JSON 파싱
+    // 2) Parse JSON
     json j;
     try {
         ifs >> j;
@@ -100,7 +100,7 @@ bool UserData::loadFromJsonFile(const std::string& path)
         return false;
     }
 
-    // 3) Snapshot에 먼저 담기 (validate 전 단계)
+    // 3) Stage values in a snapshot (before validation)
     uint16_t newUserScore = 0;
     std::array<uint8_t, kScoreCount> newCurScores{};
     newCurScores.fill(0);
@@ -141,10 +141,10 @@ bool UserData::loadFromJsonFile(const std::string& path)
         return false;
     }
 
-    // 4) (여기서 추가 검증 규칙을 넣을 수 있음)
-    // 예: userScore가 curScores 합과 일치해야 한다 등
+    // 4) (Insert additional validation rules here if needed)
+    // e.g., require userScore to match the sum of curScores
 
-    // 5) apply (성공했을 때만 실제 멤버 갱신)
+    // 5) Apply (update members only on success)
     username = std::move(newUsername);
     userTotalScore = newUserScore;
     for (size_t i = 0; i < kScoreCount; ++i) {

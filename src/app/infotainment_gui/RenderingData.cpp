@@ -37,13 +37,13 @@ RenderingData::RenderPayload RenderingData::composeFrame() {
     }
     payload.tierType = toTierType(payload.userTotalScore);
 
-    // Default background: 필요 시 MENU_ICON_1 사용 (없으면 nullptr)
+    // Default background: use MENU_ICON_1 if available (otherwise nullptr)
     payload.background = imageData.getDefaultImage(ImageData::DefaultImageType::MENU_ICON_1);
 
-    // Display type별로 필요한 asset 선택
+    // Choose the assets needed for each display type
     switch (payload.displayType) {
     case DisplayType::Default:
-        // 배경만 사용
+        // Use only the background (if a sign image exists, it will be filled during the correction below)
         break;
     case DisplayType::SignAlert:
         payload.signImage = imageData.getSignImage(payload.signType);
@@ -67,6 +67,11 @@ RenderingData::RenderPayload RenderingData::composeFrame() {
         break;
     }
 
+    // Even for the default screen, fill signImage when a signal exists so the widget renders
+    if (!payload.signImage && payload.signType != ImageData::SignType::NONE) {
+        payload.signImage = imageData.getSignImage(payload.signType);
+    }
+
     return payload;
 }
 
@@ -76,7 +81,13 @@ RenderingData::DisplayType RenderingData::toDisplayType(uint8_t raw) {
 }
 
 ImageData::SignType RenderingData::toSignType(uint8_t raw) {
-    return clampEnum(raw, ImageData::SignType::NONE, ImageData::SignType::MAX_SIGN_TYPES);
+    switch (raw) {
+    case 0: return ImageData::SignType::NONE;
+    case 1: return ImageData::SignType::TRAFFIC_RED;
+    case 2: return ImageData::SignType::TRAFFIC_YELLOW;
+    case 3: return ImageData::SignType::TRAFFIC_GREEN;
+    default: return ImageData::SignType::NONE;
+    }
 }
 
 ImageData::WarningIconType RenderingData::toWarningType(uint8_t raw) {

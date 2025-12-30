@@ -7,24 +7,33 @@
 #include "AppController.h"
 
 #include <QApplication>
+#include <QDir>
 #include <QTimer>
 #include <QObject>
 #include <thread>
 #include <chrono>
 #include <atomic>
 
+namespace {
+QString makeAbsolutePath(const QString& relative) {
+    QDir dir(QCoreApplication::applicationDirPath());
+    return dir.absoluteFilePath(relative);
+}
+}
+
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
 
     UserData& userData = UserData::getInstance();
-    const std::string userDataPath = "../../../resources/userdata/user_data.json";
+    const std::string userDataPath = makeAbsolutePath("../../../resources/userdata/user_data.json").toStdString();
     if (!userData.loadFromJsonFile(userDataPath)) {
         std::cerr << "Failed to load user data from JSON file." << std::endl;
         return -1;
     }
 
     ImageData& imageData = ImageData::getInstance();
-    AppController::loadAssets(imageData);
+    const QString assetBasePath = makeAbsolutePath("../../../resources/images/");
+    AppController::loadAssets(imageData, assetBasePath);
 
     BaseData& baseData = BaseData::getInstance();
     RenderingData& renderingData = RenderingData::getInstance();

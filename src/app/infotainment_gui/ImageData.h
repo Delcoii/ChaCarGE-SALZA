@@ -19,6 +19,9 @@ public:
 
     enum class SignType : uint8_t {
         NONE,
+        TRAFFIC_RED,
+        TRAFFIC_YELLOW,
+        TRAFFIC_GREEN,
         BUMP,
         OVERSPEED,
         OVERTURN,
@@ -50,21 +53,21 @@ public:
 
 private:
     ImageData();
-    ~ImageData();                         // ✅ 포인터 해제 필요해서 default 제거
+    ~ImageData();                         // Explicit destructor to release pointers
     ImageData(const ImageData&) = delete;
     ImageData& operator=(const ImageData&) = delete;
 
 public:
     static ImageData& getInstance();
 
-    // Loaders (경로 입력 → Qt asset 로드)
+    // Loaders (path input -> load Qt asset)
     bool loadEmotionGif(EmotionGifType type, const QString& path, int speedPercent = 100);
     bool loadDefaultImage(DefaultImageType type, const QString& path);
     bool loadSignImage(SignType type, const QString& path);
     bool loadWarningIcon(WarningIconType type, const QString& path);
     bool loadTierImage(TierType type, const QString& path);
 
-    // Getters (nullptr or isNull()이면 아직 로드되지 않은 상태)
+    // Getters (if nullptr or isNull(), the asset has not been loaded yet)
     QMovie* getEmotionGif(EmotionGifType type) const;
     const QPixmap* getDefaultImage(DefaultImageType type) const;
     const QPixmap* getSignImage(SignType type) const;
@@ -72,7 +75,7 @@ public:
     const QPixmap* getTierImage(TierType type) const;
 
 private:
-    // ✅ QMovie는 값으로 배열 보관 X → 포인터로 보관
+    // QMovie cannot be stored by value in arrays -> keep as pointers
     std::array<std::unique_ptr<QMovie>, static_cast<size_t>(EmotionGifType::MAX_GIF_TYPES)> emotionGifs{};
 
     std::array<QPixmap, static_cast<size_t>(SignType::MAX_SIGN_TYPES)> signImages{};

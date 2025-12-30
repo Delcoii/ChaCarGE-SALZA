@@ -19,5 +19,11 @@
 # Object files
 *.o
 
+# Binaries/executables
+*.exe
+*.out
+*.bin
+src/app/infotainment_gui/app
+
 # Eclipse metadata (if applicable)
 .metadata/

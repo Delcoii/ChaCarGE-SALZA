@@ -3,6 +3,7 @@
 
 #include <thread>
 #include <atomic>
+#include <QString>
 
 #include "BaseData.h"
 #include "RenderingData.h"
@@ -19,7 +20,7 @@ public:
     void stop();
     void join();
 
-    static void loadAssets(ImageData& imageData);
+    static void loadAssets(ImageData& imageData, const QString& assetBasePath);
 
 private:
     void producerLoop();

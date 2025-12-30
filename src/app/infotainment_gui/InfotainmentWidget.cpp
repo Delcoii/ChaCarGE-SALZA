@@ -190,7 +190,10 @@ void InfotainmentWidget::setPixmapToLabel(QLabel* label, const QPixmap* pix, int
     if (pix) {
         label->setPixmap(pix->scaled(w, h, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     } else {
-        label->setText(fallback);
+        label->clear();
+        if (fallback && *fallback) {
+            label->setText(fallback);
+        }
     }
 }
 
@@ -214,14 +217,15 @@ QPixmap makeSegmentPixmap(const QColor& fill, const QColor& border) {
 
 void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload) {
     const int sigSide = std::max(120, static_cast<int>(height() * 0.15));
-    setPixmapToLabel(signalLabel, signalPix, sigSide, sigSide, "Signal?");
+    const bool hasTraffic = (payload.rawSignSignal != 0) && payload.signImage;
+    setPixmapToLabel(signalLabel, hasTraffic ? payload.signImage : nullptr, sigSide, sigSide, "");
 
     const int centerSize = std::max(320, std::min(static_cast<int>(width() * 0.4), static_cast<int>(height() * 0.6)));
     const int gifSize = static_cast<int>(centerSize * 2 / 3); // reduce to ~66%
     gifSizePx = gifSize;                                      // keep stable target
     gifLabel->setMinimumSize(gifSize, gifSize);
     gifLabel->setMaximumSize(gifSize, gifSize);
-    const QPixmap* centerPix = centerOverride ? centerOverride : signalPix;
+    const QPixmap* centerPix = hasTraffic ? payload.signImage : nullptr;
     // cache movies
     if (!happyGif) happyGif = imageData.getEmotionGif(ImageData::EmotionGifType::HAPPY);
     if (!badGif)   badGif   = imageData.getEmotionGif(ImageData::EmotionGifType::BAD_FACE);
