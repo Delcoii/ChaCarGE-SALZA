@@ -103,6 +103,35 @@ void EntryGetIMU(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
+void I2C_Bus_Recovery() {
+  // Setting SCL & SDA to open-drain mode
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  
+  GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  // Set SDA to High
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+
+  // Toggle SCL 9 times (High->Low->High...)
+  for(int i=0; i<10; i++) {
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // Low
+      HAL_Delay(1); // slight delay
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);   // High
+      HAL_Delay(1);
+  }
+
+  // Generate Stop Condition (SCL High, SDA Low->High)
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  // After this function, the pin settings will be restored to I2C
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -133,7 +162,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  I2C_Bus_Recovery();
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -208,7 +237,7 @@ int main(void)
   TaskCANTransmitHandle = osThreadCreate(osThread(TaskCANTransmit), NULL);
 
   /* definition and creation of TaskGetIMU */
-  osThreadDef(TaskGetIMU, EntryGetIMU, osPriorityNormal, 0, 128);
+  osThreadDef(TaskGetIMU, EntryGetIMU, osPriorityNormal, 0, 512);
   TaskGetIMUHandle = osThreadCreate(osThread(TaskGetIMU), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -863,16 +892,16 @@ void EntryPrintResult(void const * argument)
                           print_data.imu_data.acc_y_mps2,
                           print_data.imu_data.acc_z_mps2);                        
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
-        str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg/s] %.2f[deg/s] %.2f[deg/s]\r\n",
-                          print_data.imu_data.gyro_x_dps,
-                          print_data.imu_data.gyro_y_dps,
-                          print_data.imu_data.gyro_z_dps);
-        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
-        str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg] %.2f[deg] %.2f[deg]\r\n",
-                          print_data.imu_data.roll_deg,
-                          print_data.imu_data.pitch_deg,
-                          print_data.imu_data.yaw_deg);
-        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+        // str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg/s] %.2f[deg/s] %.2f[deg/s]\r\n",
+        //                   print_data.imu_data.gyro_x_dps,
+        //                   print_data.imu_data.gyro_y_dps,
+        //                   print_data.imu_data.gyro_z_dps);
+        // HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+        // str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg] %.2f[deg] %.2f[deg]\r\n",
+        //                   print_data.imu_data.roll_deg,
+        //                   print_data.imu_data.pitch_deg,
+        //                   print_data.imu_data.yaw_deg);
+        // HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
 
     osDelay(100);
@@ -1074,14 +1103,17 @@ void EntryCANTransmit(void const * argument)
 void EntryGetIMU(void const * argument)
 {
   /* USER CODE BEGIN EntryGetIMU */
+  osDelay(500);
+
   uint8_t who_am_i = 0;
+  char uart_buf[100];
   if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_WHO_AM_I,
                         I2C_MEMADD_SIZE_8BIT, &who_am_i, 1, 100) != HAL_OK) {
-    // int len = snprintf(uart_buf, sizeof(uart_buf), "myAHRS+ Found! ID: 0x%02X\r\n", who_am_i);
-    // HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);
+    int len = snprintf(uart_buf, sizeof(uart_buf), "myAHRS+ Found! ID: 0x%02X\r\n", who_am_i);
+    HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);
   } else {
-    // char* msg = "myAHRS+ NOT Found!\r\n";
-    // HAL_UART_Transmit(&huart3, (uint8_t*)msg, strlen(msg), 100);
+    char* msg = "myAHRS+ NOT Found!\r\n";
+    HAL_UART_Transmit(&huart3, (uint8_t*)msg, strlen(msg), 100);
     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
   }
 
