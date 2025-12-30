@@ -858,7 +858,17 @@ void EntryPrintResult(void const * argument)
     }
 
     if (event_bits & EVT_IMU_DATA_UPDATED_FOR_LOG) {
-        str_len = snprintf(str, sizeof(str), "IMU: %f[deg] %f[deg] %f[deg]\r\n",
+        str_len = snprintf(str, sizeof(str), "IMU: %.2f[m/s2] %.2f[m/s2] %.2f[m/s2]\r\n",
+                          print_data.imu_data.acc_x_mps2,
+                          print_data.imu_data.acc_y_mps2,
+                          print_data.imu_data.acc_z_mps2);                        
+        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+        str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg/s] %.2f[deg/s] %.2f[deg/s]\r\n",
+                          print_data.imu_data.gyro_x_dps,
+                          print_data.imu_data.gyro_y_dps,
+                          print_data.imu_data.gyro_z_dps);
+        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+        str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg] %.2f[deg] %.2f[deg]\r\n",
                           print_data.imu_data.roll_deg,
                           print_data.imu_data.pitch_deg,
                           print_data.imu_data.yaw_deg);

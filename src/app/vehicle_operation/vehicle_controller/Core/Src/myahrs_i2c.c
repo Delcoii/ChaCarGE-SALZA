@@ -72,6 +72,13 @@ IMUData_t GetIMUData(void) {
         return imu_data_;
     }
 
+
+    // retry
+    i2c_state = I2C_READ_RPY;
+    if(HAL_I2C_Mem_Read_IT(&hi2c1, MYAHRS_I2C_ADDR, REG_ROLL_LOW, I2C_MEMADD_SIZE_8BIT, i2c_buf, 6) != HAL_OK) {
+         HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); 
+    }
+
     // fatal error
     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
     return (IMUData_t){-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
