@@ -28,9 +28,7 @@
 #include "steer_adc_processing.h"
 #include "vehicle_control.h"
 #include "CAN_DB_Interface.h"
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
+#include "myahrs_i2c.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,6 +58,8 @@ CAN_HandleTypeDef hcan1;
 
 ETH_HandleTypeDef heth;
 
+I2C_HandleTypeDef hi2c1;
+
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 
@@ -71,10 +71,16 @@ osThreadId TaskGetRemoteHandle;
 osThreadId TaskPrintResultHandle;
 osThreadId TaskGetSteerADCHandle;
 osThreadId TaskVehicleContHandle;
-osThreadId TaskCANTxHandle;
+osThreadId TaskCANTransmitHandle;
+osThreadId TaskGetIMUHandle;
 /* USER CODE BEGIN PV */
 osMutexId vehicleDataMutexHandle;
 EventGroupHandle_t eventGroupHandle; // FreeRTOS Event Group
+
+// Shared Memory
+SharedMemory_t vehicle_data_shm_;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -87,55 +93,50 @@ static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_CAN1_Init(void);
+static void MX_I2C1_Init(void);
 void EntryGetRemote(void const * argument);
 void EntryPrintResult(void const * argument);
 void EntryGetSteerADC(void const * argument);
 void EntryVehicleControl(void const * argument);
-void EntryCANTx(void const * argument);
+void EntryCANTransmit(void const * argument);
+void EntryGetIMU(void const * argument);
 
 /* USER CODE BEGIN PFP */
-void CAN_Send_Message(uint16_t stdId, char *str)
-{
 
-	CAN_TxHeaderTypeDef txheader;
-	uint8_t txdata[8] = {0};
-	char str1[100];
-	uint32_t txmailbox;
-	int str_len = 0;
+void I2C_Bus_Recovery() {
+  // Setting SCL & SDA to open-drain mode
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  
+  GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-	uint8_t len = strlen(str);
-	if (len > 8) len = 8;
+  // Set SDA to High
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
 
-	txheader.StdId = stdId;
-	txheader.IDE = CAN_ID_STD;
-	txheader.RTR = CAN_RTR_DATA;
-	txheader.DLC = len;
-	txheader.TransmitGlobalTime = DISABLE;
+  // Toggle SCL 9 times (High->Low->High...)
+  for(int i=0; i<10; i++) {
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // Low
+      HAL_Delay(1); // slight delay
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);   // High
+      HAL_Delay(1);
+  }
 
-	memcpy(txdata, str, len);
-
-	HAL_StatusTypeDef ret = HAL_CAN_AddTxMessage(&hcan1, &txheader, txdata, &txmailbox);
-
-
-	if (ret == HAL_OK)
-	{
-		str_len = snprintf(str1, sizeof(str1), "[MCU-->APU]=0x%03X\r\n\n", stdId);
-		HAL_UART_Transmit(&huart3, (uint8_t*)str1, str_len, 100);
-	}
-	else
-	{
-		str_len = snprintf(str1, sizeof(str1), "CAN Tx Fail!!!\r\n\n", stdId);
-		HAL_UART_Transmit(&huart3, (uint8_t*)str1, str_len, 100);
-	}
-
+  // Generate Stop Condition (SCL High, SDA Low->High)
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  // After this function, the pin settings will be restored to I2C
 }
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-// Shared Memory
-SharedMemory_t vehicle_data_shm_;
-SemaphoreHandle_t xVehicleDataMutex;
+
 /* USER CODE END 0 */
 
 /**
@@ -161,7 +162,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  I2C_Bus_Recovery();
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -173,6 +174,7 @@ int main(void)
   MX_TIM1_Init();
   MX_ADC1_Init();
   MX_CAN1_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -195,6 +197,10 @@ int main(void)
   // from steer_adc_processing.h
   osSemaphoreDef(steerAdcSem);
   steer_adc_sem_handle_ = osSemaphoreCreate(osSemaphore(steerAdcSem), 1);
+
+  // from myahrs_i2c.h
+  osSemaphoreDef(imuDataSem);
+  imu_data_sem_handle_ = osSemaphoreCreate(osSemaphore(imuDataSem), 1);
 
   // Create Event Group
   eventGroupHandle = xEventGroupCreate();
@@ -223,12 +229,16 @@ int main(void)
   TaskGetSteerADCHandle = osThreadCreate(osThread(TaskGetSteerADC), NULL);
 
   /* definition and creation of TaskVehicleCont */
-  osThreadDef(TaskVehicleCont, EntryVehicleControl, osPriorityNormal, 0, 512);
+  osThreadDef(TaskVehicleCont, EntryVehicleControl, osPriorityNormal, 0, 128);
   TaskVehicleContHandle = osThreadCreate(osThread(TaskVehicleCont), NULL);
 
-  /* definition and creation of TaskCANTx */
-  osThreadDef(TaskCANTx, EntryCANTx, osPriorityNormal, 0, 512);
-  TaskCANTxHandle = osThreadCreate(osThread(TaskCANTx), NULL);
+  /* definition and creation of TaskCANTransmit */
+  osThreadDef(TaskCANTransmit, EntryCANTransmit, osPriorityNormal, 0, 512);
+  TaskCANTransmitHandle = osThreadCreate(osThread(TaskCANTransmit), NULL);
+
+  /* definition and creation of TaskGetIMU */
+  osThreadDef(TaskGetIMU, EntryGetIMU, osPriorityNormal, 0, 512);
+  TaskGetIMUHandle = osThreadCreate(osThread(TaskGetIMU), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -430,6 +440,54 @@ static void MX_ETH_Init(void)
   /* USER CODE BEGIN ETH_Init 2 */
 
   /* USER CODE END ETH_Init 2 */
+
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
 
 }
 
@@ -815,7 +873,7 @@ void EntryPrintResult(void const * argument)
     }
 
     if (event_bits & EVT_STEER_ADC_UPDATED_FOR_LOG) {
-        str_len = snprintf(str, sizeof(str), "ADC: %lu\r\n", print_data.steer_adc);
+        str_len = snprintf(str, sizeof(str), "ADC: %d\r\n", print_data.steer_adc);
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
     
@@ -826,6 +884,24 @@ void EntryPrintResult(void const * argument)
                           print_data.vehicle_command.steer_tire_degree,
                           print_data.vehicle_command.steer_adc);
         HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+    }
+
+    if (event_bits & EVT_IMU_DATA_UPDATED_FOR_LOG) {
+        str_len = snprintf(str, sizeof(str), "IMU: %.2f[m/s2] %.2f[m/s2] %.2f[m/s2]\r\n",
+                          print_data.imu_data.acc_x_mps2,
+                          print_data.imu_data.acc_y_mps2,
+                          print_data.imu_data.acc_z_mps2);                        
+        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+        // str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg/s] %.2f[deg/s] %.2f[deg/s]\r\n",
+        //                   print_data.imu_data.gyro_x_dps,
+        //                   print_data.imu_data.gyro_y_dps,
+        //                   print_data.imu_data.gyro_z_dps);
+        // HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+        // str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg] %.2f[deg] %.2f[deg]\r\n",
+        //                   print_data.imu_data.roll_deg,
+        //                   print_data.imu_data.pitch_deg,
+        //                   print_data.imu_data.yaw_deg);
+        // HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
 
     osDelay(100);
@@ -928,17 +1004,16 @@ void EntryVehicleControl(void const * argument)
   /* USER CODE END EntryVehicleControl */
 }
 
-/* USER CODE BEGIN Header_EntryCANTx */
+/* USER CODE BEGIN Header_EntryCANTransmit */
 /**
-* @brief Function implementing the TaskCANTx thread.
+* @brief Function implementing the TaskCANTransmit thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_EntryCANTx */
-void EntryCANTx(void const * argument)
+/* USER CODE END Header_EntryCANTransmit */
+void EntryCANTransmit(void const * argument)
 {
-  /* USER CODE BEGIN EntryCANTx */
-  
+  /* USER CODE BEGIN EntryCANTransmit */
   uint32_t txmailbox;
   CAN_TxHeaderTypeDef txheader;
   txheader.IDE = CAN_ID_STD;
@@ -975,7 +1050,7 @@ void EntryCANTx(void const * argument)
         HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
       } else {
         // fatal:transmit error!!
-        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
       }
     }
 
@@ -987,7 +1062,7 @@ void EntryCANTx(void const * argument)
         HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
       } else {
         // fatal:transmit error!!
-        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
       }
     }
 
@@ -999,7 +1074,7 @@ void EntryCANTx(void const * argument)
         HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
       } else {
         // fatal:transmit error!!
-        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
       }
 
       txheader.StdId = CANID_VEHICLE_COMMAND2;
@@ -1008,14 +1083,58 @@ void EntryCANTx(void const * argument)
         HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
       } else {
         // fatal:transmit error!!
-        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
       }
     }
 
     HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
     osDelay(10);
   }
-  /* USER CODE END EntryCANTx */
+  /* USER CODE END EntryCANTransmit */
+}
+
+/* USER CODE BEGIN Header_EntryGetIMU */
+/**
+* @brief Function implementing the TaskGetIMU thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_EntryGetIMU */
+void EntryGetIMU(void const * argument)
+{
+  /* USER CODE BEGIN EntryGetIMU */
+  osDelay(500);
+
+  uint8_t who_am_i = 0;
+  char uart_buf[100];
+  if (HAL_I2C_Mem_Read(&hi2c1, MYAHRS_I2C_ADDR, REG_WHO_AM_I,
+                        I2C_MEMADD_SIZE_8BIT, &who_am_i, 1, 100) != HAL_OK) {
+    int len = snprintf(uart_buf, sizeof(uart_buf), "myAHRS+ Found! ID: 0x%02X\r\n", who_am_i);
+    HAL_UART_Transmit(&huart3, (uint8_t*)uart_buf, len, 100);
+  } else {
+    char* msg = "myAHRS+ NOT Found!\r\n";
+    HAL_UART_Transmit(&huart3, (uint8_t*)msg, strlen(msg), 100);
+    HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+  }
+
+  // initial read
+  InitIMUData();
+  IMUData_t imu_data;
+
+  /* Infinite loop */
+  for(;;) {
+    imu_data = GetIMUData();  // This function waits for semaphore
+    
+    osMutexWait(vehicleDataMutexHandle, osWaitForever);
+    vehicle_data_shm_.imu_data = imu_data;
+    osMutexRelease(vehicleDataMutexHandle);
+
+    if (eventGroupHandle != NULL) {
+      xEventGroupSetBits(eventGroupHandle, EVT_IMU_DATA_UPDATED_FOR_LOG);
+      xEventGroupSetBits(eventGroupHandle, EVT_IMU_DATA_UPDATED_FOR_CAN);
+    }
+  }
+  /* USER CODE END EntryGetIMU */
 }
 
 /**
