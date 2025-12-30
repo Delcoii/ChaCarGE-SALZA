@@ -53,7 +53,6 @@ int main() {
     
     // initialize variables
     double time_step = 0.0;
-    int traffic_timer = 0;
 
     printf("[Generator] Test data generation started (Ctrl+C to stop)\n");
     printf("--------------------------------------------------------------------------------------------------------\n");
@@ -92,7 +91,11 @@ int main() {
                 p_shm->given_info.vehicle_command = SetVehicleCommandFromCAN(&frame);
                 break;
             case CANID_IMU_DATA:
+                p_shm->given_info.imu_accel = SetIMUDataFromCAN(&frame);
                 break;
+            case CANID_TRAFFIC_SIGN:
+                p_shm->given_info.traffic_state = SetTrafficSignFromCAN(&frame);
+                break;    
             default:
                 break;
         }  
@@ -155,7 +158,7 @@ static int init_can_socket(const char *ifname) {
         return -1;
     }
 
-    struct can_filter rfilter[3];
+    struct can_filter rfilter[4];
     rfilter[0].can_id   = CANID_VEHICLE_COMMAND1;
     rfilter[0].can_mask = CAN_SFF_MASK;  // 11-bit
     
@@ -164,6 +167,9 @@ static int init_can_socket(const char *ifname) {
 
     rfilter[2].can_id   = CANID_IMU_DATA;
     rfilter[2].can_mask = CAN_SFF_MASK;
+
+    rfilter[3].can_id   = CANID_TRAFFIC_SIGN;
+    rfilter[3].can_mask = CAN_SFF_MASK;
 
     if (setsockopt(can_socket, SOL_CAN_RAW, CAN_RAW_FILTER,
                    &rfilter, sizeof(rfilter)) < 0) {
