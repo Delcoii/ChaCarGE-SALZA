@@ -21,7 +21,9 @@
 
 #define CANID_STEER_ADC		    0x170
 
-#define CANID_IMU_DATA			0x507
+#define CANID_IMU_DATA1			0x507
+#define CANID_IMU_DATA2			0x508
+#define CANID_IMU_DATA3			0x509
 //#define CANID_ADC_DATA			0x444	// Test ADC Message
 
 
@@ -54,6 +56,26 @@ typedef union{
 		uint8_t reserved[4];
 	} ADCFrame_t;
 
+	struct {
+		uint16_t acc_x_mps2;
+		uint16_t acc_y_mps2;
+		uint16_t acc_z_mps2;
+		uint8_t reserved[2];
+	} IMUData1Frame_t;
+
+	struct {
+		uint16_t gyro_x_dps;
+		uint16_t gyro_y_dps;
+		uint16_t gyro_z_dps;
+		uint8_t reserved[2];
+	} IMUData2Frame_t;
+
+	struct {
+		uint16_t roll_deg;
+		uint16_t pitch_deg;
+		uint16_t yaw_deg;
+		uint8_t reserved[2];
+	} IMUData3Frame_t;
 
 } VehicleCANFrame_t;
 
@@ -64,5 +86,8 @@ void SetRemoteSignalsCANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_
 void SetSteerADCCANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
 void SetVehicleCommand1CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
 void SetVehicleCommand2CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
+void SetIMUData1CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
+void SetIMUData2CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
+void SetIMUData3CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memory);
 
 #endif // __CAN_DB_INTERFACE_H__

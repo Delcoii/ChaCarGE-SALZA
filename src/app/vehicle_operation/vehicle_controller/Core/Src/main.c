@@ -102,36 +102,11 @@ void EntryCANTransmit(void const * argument);
 void EntryGetIMU(void const * argument);
 
 /* USER CODE BEGIN PFP */
+void I2C_Bus_Recovery();
+void CAN_Transmit_Safe(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *pHeader,
+                       uint8_t aData[], uint32_t *pTxMailbox);
 
-void I2C_Bus_Recovery() {
-  // Setting SCL & SDA to open-drain mode
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  
-  GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  // Set SDA to High
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
-
-  // Toggle SCL 9 times (High->Low->High...)
-  for(int i=0; i<10; i++) {
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // Low
-      HAL_Delay(1); // slight delay
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);   // High
-      HAL_Delay(1);
-  }
-
-  // Generate Stop Condition (SCL High, SDA Low->High)
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
-  HAL_Delay(1);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
-  // After this function, the pin settings will be restored to I2C
-}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -796,6 +771,51 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void I2C_Bus_Recovery() {
+  // Setting SCL & SDA to open-drain mode
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  
+  GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  // Set SDA to High
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+
+  // Toggle SCL 9 times (High->Low->High...)
+  for(int i=0; i<10; i++) {
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // Low
+      HAL_Delay(1); // slight delay
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);   // High
+      HAL_Delay(1);
+  }
+
+  // Generate Stop Condition (SCL High, SDA Low->High)
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  // After this function, the pin settings will be restored to I2C
+}
+
+
+void CAN_Transmit_Safe(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *pHeader, uint8_t aData[], uint32_t *pTxMailbox) {
+  uint32_t start = HAL_GetTick();
+  
+  // if all mailboxes are full, wait
+  while (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0) {
+      // timeout 10ms (to avoid deadlock)
+      if ((HAL_GetTick() - start) > 10) {
+          return; 
+      }
+  }
+  // there is empty mailbox, transmit
+  HAL_CAN_AddTxMessage(hcan, pHeader, aData, pTxMailbox);
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_EntryGetRemote */
@@ -864,44 +884,39 @@ void EntryPrintResult(void const * argument)
     // print remote signals
     int str_len = 0;
     if (event_bits & EVT_REMOTE_UPDATED_FOR_LOG) {
-        str_len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
-                          print_data.remote.steering_pulse_width_us,
-                          print_data.remote.throttle_pulse_width_us,
-                          print_data.remote.mode_pulse_width_us,
-                          print_data.remote.toggle_pulse_width_us);
-        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+      str_len = snprintf(str, sizeof(str), "RC: %lu %lu %lu %lu\r\n",
+                        print_data.remote.steering_pulse_width_us,
+                        print_data.remote.throttle_pulse_width_us,
+                        print_data.remote.mode_pulse_width_us,
+                        print_data.remote.toggle_pulse_width_us);
+      HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
 
     if (event_bits & EVT_STEER_ADC_UPDATED_FOR_LOG) {
-        str_len = snprintf(str, sizeof(str), "ADC: %d\r\n", print_data.steer_adc);
-        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+      str_len = snprintf(str, sizeof(str), "ADC: %d\r\n", print_data.steer_adc);
+      HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
     
     if (event_bits & EVT_VEHICLE_COMMAND_UPDATED_FOR_LOG) {
-        str_len = snprintf(str, sizeof(str), "CMD: %f %f %f[deg] %lu\r\n",
-                          print_data.vehicle_command.throttle,
-                          print_data.vehicle_command.brake,
-                          print_data.vehicle_command.steer_tire_degree,
-                          print_data.vehicle_command.steer_adc);
-        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+      str_len = snprintf(str, sizeof(str), "CMD: %f %f %f[deg] %lu\r\n",
+                        print_data.vehicle_command.throttle,
+                        print_data.vehicle_command.brake,
+                        print_data.vehicle_command.steer_tire_degree,
+                        print_data.vehicle_command.steer_adc);
+      HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
 
     if (event_bits & EVT_IMU_DATA_UPDATED_FOR_LOG) {
-        str_len = snprintf(str, sizeof(str), "IMU: %.2f[m/s2] %.2f[m/s2] %.2f[m/s2]\r\n",
-                          print_data.imu_data.acc_x_mps2,
-                          print_data.imu_data.acc_y_mps2,
-                          print_data.imu_data.acc_z_mps2);                        
-        HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
-        // str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg/s] %.2f[deg/s] %.2f[deg/s]\r\n",
-        //                   print_data.imu_data.gyro_x_dps,
-        //                   print_data.imu_data.gyro_y_dps,
-        //                   print_data.imu_data.gyro_z_dps);
-        // HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
-        // str_len = snprintf(str, sizeof(str), "IMU: %.2f[deg] %.2f[deg] %.2f[deg]\r\n",
-        //                   print_data.imu_data.roll_deg,
-        //                   print_data.imu_data.pitch_deg,
-        //                   print_data.imu_data.yaw_deg);
-        // HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+      str_len = snprintf(str, sizeof(str), "IMU: %.2f[m/s2] %.2f[m/s2] %.2f[m/s2]\r\n",
+                        print_data.imu_data.acc_x_mps2,
+                        print_data.imu_data.acc_y_mps2,
+                        print_data.imu_data.acc_z_mps2);                        
+      HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
+    }
+
+    if (event_bits & EVT_BAD_THING_HAPPENED) {
+      str_len = snprintf(str, sizeof(str), "BAD THING HAPPENED\r\n");
+      HAL_UART_Transmit(&huart3, (uint8_t*)str, str_len, 100);
     }
 
     osDelay(100);
@@ -1046,46 +1061,42 @@ void EntryCANTransmit(void const * argument)
     if (event_bits & EVT_REMOTE_UPDATED_FOR_CAN) {
       txheader.StdId = CANID_REMOTE_SIGNALS;
       SetRemoteSignalsCANFrame(&vehicle_can_dataframe, vehicle_data);
-      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
-        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
-      } else {
-        // fatal:transmit error!!
-        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-      }
+      CAN_Transmit_Safe(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
     }
 
 
     if (event_bits & EVT_STEER_ADC_UPDATED_FOR_CAN) {
       txheader.StdId = CANID_STEER_ADC;
       SetSteerADCCANFrame(&vehicle_can_dataframe, vehicle_data);
-      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
-        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
-      } else {
-        // fatal:transmit error!!
-        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-      }
+      CAN_Transmit_Safe(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
     }
 
 
     if (event_bits & EVT_VEHICLE_COMMAND_UPDATED_FOR_CAN) {                           
       txheader.StdId = CANID_VEHICLE_COMMAND1;
       SetVehicleCommand1CANFrame(&vehicle_can_dataframe, vehicle_data);
-      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
-        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
-      } else {
-        // fatal:transmit error!!
-        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-      }
+      CAN_Transmit_Safe(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
 
       txheader.StdId = CANID_VEHICLE_COMMAND2;
       SetVehicleCommand2CANFrame(&vehicle_can_dataframe, vehicle_data);
-      if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) > 0) {
-        HAL_CAN_AddTxMessage(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
-      } else {
-        // fatal:transmit error!!
-        // HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-      }
+      CAN_Transmit_Safe(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
     }
+
+
+    if (event_bits & EVT_IMU_DATA_UPDATED_FOR_CAN) {
+      txheader.StdId = CANID_IMU_DATA1;
+      SetIMUData1CANFrame(&vehicle_can_dataframe, vehicle_data);
+      CAN_Transmit_Safe(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+
+      txheader.StdId = CANID_IMU_DATA2;
+      SetIMUData2CANFrame(&vehicle_can_dataframe, vehicle_data);
+      CAN_Transmit_Safe(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+
+      txheader.StdId = CANID_IMU_DATA3;
+      SetIMUData3CANFrame(&vehicle_can_dataframe, vehicle_data);
+      CAN_Transmit_Safe(&hcan1, &txheader, vehicle_can_dataframe.data, &txmailbox);
+    }
+
 
     HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
     osDelay(10);
