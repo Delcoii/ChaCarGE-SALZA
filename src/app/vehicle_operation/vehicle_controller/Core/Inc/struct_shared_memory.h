@@ -15,13 +15,15 @@
 #define EVT_IMU_DATA_UPDATED_FOR_CAN    (1 << 5)        // 0x20
 #define EVT_VEHICLE_COMMAND_UPDATED_FOR_LOG (1 << 6)    // 0x40
 #define EVT_VEHICLE_COMMAND_UPDATED_FOR_CAN (1 << 7)    // 0x80
+#define EVT_BAD_THING_HAPPENED          (1 << 8)        // 0x100
 
 
 // Event Group Flags for Log
 #define EVT_ALL_UPDATED_FOR_LOG    (EVT_REMOTE_UPDATED_FOR_LOG | \
                                     EVT_STEER_ADC_UPDATED_FOR_LOG | \
                                     EVT_IMU_DATA_UPDATED_FOR_LOG | \
-                                    EVT_VEHICLE_COMMAND_UPDATED_FOR_LOG)
+                                    EVT_VEHICLE_COMMAND_UPDATED_FOR_LOG | \
+                                    EVT_BAD_THING_HAPPENED)
 
 // Event Group Flags for CAN
 #define EVT_ALL_UPDATED_FOR_CAN    (EVT_REMOTE_UPDATED_FOR_CAN | \
