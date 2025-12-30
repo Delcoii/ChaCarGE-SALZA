@@ -29,7 +29,7 @@ void AppController::start() {
 void AppController::stop() {
     running = false;
     auto frame = baseData.getFrameDataCopy();
-    baseData.setFrameSignals(frame.signSignal, frame.warningSignal, frame.emotion, 4);
+    baseData.setFrameSignals(frame.rawData, frame.warningSignal, frame.emotion, 4);
 }
 
 void AppController::join() {
@@ -57,6 +57,7 @@ void AppController::loadAssets(ImageData& imageData, const QString& assetBasePat
     imageData.loadTierImage(ImageData::TierType::GOLD, path("gold.png"));
     imageData.loadTierImage(ImageData::TierType::DIAMOND, path("diamond.png"));
     imageData.loadTierImage(ImageData::TierType::MASTER, path("master.png"));
+    imageData.loadSteeringWheel(path("steering_wheel.png"));
 }
 
 void AppController::producerLoop() {
@@ -70,8 +71,12 @@ void AppController::producerLoop() {
             }
         }
 
-        // Traffic sign
-        uint8_t signSignal = static_cast<uint8_t>(shmPtr->given_info.traffic_state.sign_state);
+        // Traffic sign + vehicle command raw inputs
+        BaseData::RawData rawData{};
+        rawData.signSignal = static_cast<uint8_t>(shmPtr->given_info.traffic_state.sign_state);
+        rawData.throttle = shmPtr->given_info.vehicle_command.throttle;
+        rawData.brake = shmPtr->given_info.vehicle_command.brake;
+        rawData.steerTireDegree = shmPtr->given_info.vehicle_command.steer_tire_degree;
 
         // Driving score
         const DrivingScore& ds = shmPtr->generated_info.driving_score;
@@ -90,9 +95,9 @@ void AppController::producerLoop() {
             (delta < 0) ? static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE)
                         : static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
 
-        baseData.setFrameSignals(signSignal, warningSignal, emotionEncoded, baseData.getCurDisplayType());
+        baseData.setFrameSignals(rawData, warningSignal, emotionEncoded, baseData.getCurDisplayType());
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if (baseData.getCurDisplayType() == 4) break;
     }
 }
@@ -106,6 +111,6 @@ void AppController::rendererLoop() {
             Qt::QueuedConnection);
 
         if (baseData.getCurDisplayType() == 4) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }

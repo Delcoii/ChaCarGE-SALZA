@@ -1,4 +1,5 @@
 #include "RenderingData.h"
+#include <algorithm>
 
 namespace {
 template <typename EnumType>
@@ -22,11 +23,15 @@ RenderingData::RenderPayload RenderingData::composeFrame() {
     RenderPayload payload{};
     payload.displayType = toDisplayType(frame.curDisplayType);
 
-    payload.rawSignSignal = frame.signSignal;
+    payload.throttle = std::clamp(frame.rawData.throttle, 0.0, 100.0);
+    payload.brake = std::clamp(frame.rawData.brake, 0.0, 100.0);
+    // Keep raw steer value; UI handles scaling/clamp for visualization
+    payload.steerAngleDeg = frame.rawData.steerTireDegree;
+    payload.rawSignSignal = frame.rawData.signSignal;
     payload.rawWarningSignal = frame.warningSignal;
     payload.rawEmotionSignal = frame.emotion;
 
-    payload.signType = toSignType(frame.signSignal);
+    payload.signType = toSignType(frame.rawData.signSignal);
     payload.warningType = toWarningType(frame.warningSignal);
     payload.emotionType = toEmotionType(frame.emotion);
 
@@ -36,6 +41,7 @@ RenderingData::RenderPayload RenderingData::composeFrame() {
         payload.curScores[i] = frame.userData.getCurScore(static_cast<UserData::ScoreType>(i));
     }
     payload.tierType = toTierType(payload.userTotalScore);
+    payload.steeringWheelImage = imageData.getSteeringWheel();
 
     // Default background: use MENU_ICON_1 if available (otherwise nullptr)
     payload.background = imageData.getDefaultImage(ImageData::DefaultImageType::MENU_ICON_1);

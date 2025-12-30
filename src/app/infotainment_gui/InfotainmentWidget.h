@@ -71,6 +71,13 @@ private:
     QMovie* currentGif = nullptr;
     int gifSizePx = 0;
     int lastFilled = 0;
+    QProgressBar* throttleBar = nullptr;
+    QProgressBar* brakeBar = nullptr;
+    QLabel* throttleLabel = nullptr;
+    QLabel* brakeLabel = nullptr;
+    QLabel* steeringLabel = nullptr;
+    QLabel* steeringTextLabel = nullptr;
+    const QPixmap* steeringWheelPix = nullptr;
 };
 
 #endif // INFOTAINMENT_WIDGET_H

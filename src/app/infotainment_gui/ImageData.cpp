@@ -55,6 +55,13 @@ bool ImageData::loadTierImage(TierType type, const QString& path) {
     return true;
 }
 
+bool ImageData::loadSteeringWheel(const QString& path) {
+    QPixmap pix(path);
+    if (pix.isNull()) return false;
+    steeringWheel = std::move(pix);
+    return true;
+}
+
 QMovie* ImageData::getEmotionGif(EmotionGifType type) const {
     return emotionGifs[static_cast<size_t>(type)].get();
 }
@@ -77,4 +84,8 @@ const QPixmap* ImageData::getWarningIcon(WarningIconType type) const {
 const QPixmap* ImageData::getTierImage(TierType type) const {
     const auto& pix = tierImages[static_cast<size_t>(type)];
     return pix.isNull() ? nullptr : &pix;
+}
+
+const QPixmap* ImageData::getSteeringWheel() const {
+    return steeringWheel.isNull() ? nullptr : &steeringWheel;
 }

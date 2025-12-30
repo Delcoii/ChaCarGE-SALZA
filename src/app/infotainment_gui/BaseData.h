@@ -15,10 +15,21 @@
 
 class BaseData {
 public:
-    struct FrameData {
-        // Shared Memory Data
+    struct RawData {
+        double throttle;
+        double brake;
+        double steerTireDegree;
         uint8_t signSignal;   // Traffic sign signal
+    };
+
+    struct FrameData {
+        // Shared Memory for raw data
+        RawData rawData;   // Traffic sign signal + vehicle command
+
+        // Shared Memory for generated data
         uint8_t warningSignal;
+
+        
         uint8_t emotion;
 
         // UserData
@@ -43,7 +54,7 @@ public:
     FrameData getFrameDataCopy() const;
 
     // Temporary setter for prototyping/demo; replace with thread-safe updater later.
-    void setFrameSignals(uint8_t signSignal, uint8_t warningSignal, uint8_t emotion, uint8_t displayType);
+    void setFrameSignals(const RawData& rawData, uint8_t warningSignal, uint8_t emotion, uint8_t displayType);
     uint8_t getCurDisplayType() const;
 
 private:
