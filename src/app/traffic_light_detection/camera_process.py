@@ -30,6 +30,11 @@ def camera_process(shm_name):
         # Copy the latest frame into shared memory
         frame_array[:] = frame[:FRAME_H, :FRAME_W, :]
 
+        # 시각화 (visualization)
+        cv2.imshow("Camera View", frame[:FRAME_H, :FRAME_W, :])
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
         frame_count += 1
 
         # Print FPS every 1 second
@@ -40,3 +45,8 @@ def camera_process(shm_name):
 
         # Small sleep to reduce CPU usage
         time.sleep(0.001)
+
+    # 자원 해제
+    cap.release()
+    cv2.destroyAllWindows()
+    shm.close()
