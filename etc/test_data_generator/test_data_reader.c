@@ -89,9 +89,10 @@ int main() {
         printf("  Brake          : %5.1f %% \n", g_p_shm->given_info.vehicle_command.brake);
         printf("  Steering Angle : %5.1f deg \n", g_p_shm->given_info.vehicle_command.steer_tire_degree);
         printf("  Traffic Light  : %s \n", get_traffic_str(g_p_shm->given_info.traffic_state.sign_state));
-        printf("  IMU Accel (X/Y): %5.2f / %5.2f m/s^2 \n", 
+        printf("  IMU Accel (X/Y/Z): %5.2f / %5.2f / %5.2f m/s^2 \n", 
                g_p_shm->given_info.imu_accel.x_mps2, 
-               g_p_shm->given_info.imu_accel.y_mps2);
+               g_p_shm->given_info.imu_accel.y_mps2,
+               g_p_shm->given_info.imu_accel.z_mps2);
         printf("  Total Distance : %8.4f km \n", g_p_shm->given_info.drive_distance.data_km);
         printf("\n");
 
