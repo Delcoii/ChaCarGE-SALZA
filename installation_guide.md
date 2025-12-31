@@ -23,6 +23,7 @@ source venv/bin/activate    # activating env
 pip install --upgrade pip
 pip install ultralytics onnxruntime opencv-python
 pip install onnx onnxsim
+pip install posix-ipc
 ```
 ### 4. Checking Camera Hardware (USB Camera)
 ```bash
