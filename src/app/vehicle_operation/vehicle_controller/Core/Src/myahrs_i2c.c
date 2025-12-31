@@ -63,7 +63,7 @@ IMUData_t GetIMUData(void) {
         imu_data_.pitch_deg = pitch_raw * RPY_SCALE;
         imu_data_.yaw_deg   = yaw_raw   * RPY_SCALE;
         imu_data_.acc_x_mps2 = acc_x_raw * ACC_SCALE;
-        imu_data_.acc_y_mps2 = acc_y_raw * ACC_SCALE;
+        imu_data_.acc_y_mps2 = acc_y_raw * ACC_SCALE * (-1.0);
         imu_data_.acc_z_mps2 = acc_z_raw * ACC_SCALE;
         imu_data_.gyro_x_dps = gyro_x_raw * GYRO_SCALE;
         imu_data_.gyro_y_dps = gyro_y_raw * GYRO_SCALE;

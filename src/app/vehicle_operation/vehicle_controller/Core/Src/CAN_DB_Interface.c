@@ -64,6 +64,7 @@ void SetIMUData1CANFrame(VehicleCANFrame_t *p_frame, SharedMemory_t shared_memor
 
 	p_frame->IMUData1Frame_t.acc_x_mps2
 		= (uint16_t)((shared_memory.imu_data.acc_x_mps2 + 20.0) * 100.0);
+	// wierd direction of ay.. why?
 	p_frame->IMUData1Frame_t.acc_y_mps2
 		= (uint16_t)((shared_memory.imu_data.acc_y_mps2 + 20.0) * 100.0);
 	p_frame->IMUData1Frame_t.acc_z_mps2
