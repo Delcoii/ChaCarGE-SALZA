@@ -35,6 +35,7 @@ public:
         const QPixmap* warningIcon = nullptr;
         QMovie* emotionGif = nullptr;
         const QPixmap* tierImage = nullptr;
+        const QPixmap* steeringWheelImage = nullptr;
 
         // Derived typed info (if invalid, *_Type::NONE)
         ImageData::SignType signType = ImageData::SignType::NONE;
@@ -47,6 +48,9 @@ public:
         std::array<uint8_t, static_cast<size_t>(UserData::ScoreType::MAX_SCORE_TYPES)> curScores{};
 
         // Raw signals (for direct UI display or debugging)
+        double throttle = 0.0;
+        double brake = 0.0;
+        double steerAngleDeg = 0.0;
         uint8_t rawSignSignal = 0;
         uint8_t rawWarningSignal = 0;
         uint8_t rawEmotionSignal = 0;

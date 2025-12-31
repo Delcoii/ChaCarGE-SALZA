@@ -24,6 +24,8 @@
 *.out
 *.bin
 src/app/infotainment_gui/app
+etc/test_data_generator/generator
+etc/test_data_generator/reader
 
 # Eclipse metadata (if applicable)
 .metadata/

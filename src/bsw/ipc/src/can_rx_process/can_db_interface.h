@@ -20,6 +20,7 @@
 #include "shm_layout.h"
 
 // CAN ID Definition
+#define CANID_TRAFFIC_SIGN      0x123
 #define CANID_VEHICLE_COMMAND1	0x150
 #define CANID_VEHICLE_COMMAND2	0x151
 
@@ -33,5 +34,6 @@
 
 IMUAccel SetIMUDataFromCAN(const struct can_frame *frame);
 VehicleCommand SetVehicleCommandFromCAN(const struct can_frame *frame);
+TrafficSignState SetTrafficSignFromCAN(const struct can_frame *frame);
 
 #endif // __CAN_DB_INTERFACE_H__

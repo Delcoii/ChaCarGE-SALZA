@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QProgressBar>
 #include <QPainter>
+#include <QTransform>
 #include <QColor>
 #include <algorithm>
 #include <QTimer>
@@ -92,6 +93,68 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     contentRow->addWidget(warningContainer, 1);
 
     body->addLayout(contentRow, 1);
+
+    // Accel / Brake gauges (vertical, labels below)
+    auto* gaugeRow = new QHBoxLayout();
+    gaugeRow->setContentsMargins(12, 4, 12, 4);
+    gaugeRow->setSpacing(32);
+    gaugeRow->addStretch();
+
+    struct GaugeWidgets {
+        QProgressBar* bar;
+        QLabel* label;
+        QVBoxLayout* layout;
+    };
+    auto makeGauge = [this](const QString& name, const QString& chunkStyle) -> GaugeWidgets {
+        auto* column = new QVBoxLayout();
+        column->setSpacing(4);
+        column->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
+
+        auto* bar = new QProgressBar(this);
+        bar->setOrientation(Qt::Vertical);
+        bar->setRange(0, 100);
+        bar->setValue(0);
+        bar->setFixedSize(32, 180);
+        bar->setTextVisible(false);
+        bar->setStyleSheet(
+            "QProgressBar { background: #1e222b; border-radius: 8px; border: 1px solid #2a2f3a; }"
+            "QProgressBar::chunk {" + chunkStyle + " border-radius: 8px; }");
+
+        auto* lbl = new QLabel(name, this);
+        lbl->setStyleSheet("font-size: 16px; font-weight: 700; color: #e7e9ec;");
+        lbl->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+
+        column->addWidget(bar, 0, Qt::AlignHCenter | Qt::AlignBottom);
+        column->addWidget(lbl, 0, Qt::AlignHCenter | Qt::AlignTop);
+        return {bar, lbl, column};
+    };
+
+    auto accelGauge = makeGauge("Accel", " background: qlineargradient(x1:0, y1:1, x2:0, y2:0, stop:0 #1f8a4d, stop:1 #2ecc71);");
+    throttleBar = accelGauge.bar;
+    throttleLabel = accelGauge.label;
+
+    auto brakeGauge = makeGauge("Brake", " background: qlineargradient(x1:0, y1:1, x2:0, y2:0, stop:0 #8a1f1f, stop:1 #ff4d4d);");
+    brakeBar = brakeGauge.bar;
+    brakeLabel = brakeGauge.label;
+
+    gaugeRow->addLayout(accelGauge.layout);
+    gaugeRow->addLayout(brakeGauge.layout);
+
+    // Steering wheel
+    auto* steeringCol = new QVBoxLayout();
+    steeringCol->setSpacing(4);
+    steeringCol->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
+    steeringLabel = createImageLabel(140, 140);
+    steeringLabel->setStyleSheet("background: transparent;");
+    steeringTextLabel = new QLabel("Steering Wheel", this);
+    steeringTextLabel->setStyleSheet("font-size: 16px; font-weight: 700; color: #e7e9ec;");
+    steeringTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    steeringCol->addWidget(steeringLabel, 0, Qt::AlignHCenter | Qt::AlignBottom);
+    steeringCol->addWidget(steeringTextLabel, 0, Qt::AlignHCenter | Qt::AlignTop);
+
+    gaugeRow->addLayout(steeringCol);
+    gaugeRow->addStretch();
+    body->addLayout(gaugeRow);
     stack->addWidget(mainContainer);
 
     // Score container
@@ -256,6 +319,35 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         warningLabel->setPixmap(warningEmpty);
     }
 
+    // throttle gauge update (0~100)
+    if (throttleBar) {
+        throttleBar->setValue(static_cast<int>(payload.throttle));
+    }
+    if (brakeBar) {
+        brakeBar->setValue(static_cast<int>(payload.brake));
+    }
+
+    // Steering wheel rotation (-50 ~ 50 deg, left negative, right positive)
+    if (steeringLabel) {
+        if (payload.steeringWheelImage) {
+            steeringWheelPix = payload.steeringWheelImage; // cache pointer
+        }
+        const QPixmap* src = steeringWheelPix;
+        if (src) {
+            const double clamped = std::clamp(payload.steerAngleDeg, -22.0, 22.0);
+            const double angle = (clamped / 22.0) * 90.0; // map raw steer -> visual range
+            const int targetSize = 140;
+            QTransform t;
+            // Qt: positive angle is CCW (left); need CW for positive degrees -> rotate(-angle)
+            t.rotate(-angle);
+            QPixmap rotated = src->transformed(t, Qt::SmoothTransformation);
+            QPixmap scaled = rotated.scaled(targetSize, targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            steeringLabel->setPixmap(scaled);
+        } else {
+            steeringLabel->setText("No wheel");
+        }
+    }
+
     // update score gauge only (no numeric text)
 }
 
@@ -293,7 +385,7 @@ void InfotainmentWidget::toggleDisplayType() {
     } else {
         nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::Dashboard);
     }
-    baseData.setFrameSignals(frame.signSignal, frame.warningSignal, frame.emotion, nextDisplay);
+    baseData.setFrameSignals(frame.rawData, frame.warningSignal, frame.emotion, nextDisplay);
     // Immediate UI refresh to reflect the new mode without waiting on the renderer loop
     showFrame(renderingData.composeFrame());
 }

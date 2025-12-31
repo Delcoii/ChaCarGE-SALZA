@@ -66,6 +66,7 @@ public:
     bool loadSignImage(SignType type, const QString& path);
     bool loadWarningIcon(WarningIconType type, const QString& path);
     bool loadTierImage(TierType type, const QString& path);
+    bool loadSteeringWheel(const QString& path);
 
     // Getters (if nullptr or isNull(), the asset has not been loaded yet)
     QMovie* getEmotionGif(EmotionGifType type) const;
@@ -73,6 +74,7 @@ public:
     const QPixmap* getSignImage(SignType type) const;
     const QPixmap* getWarningIcon(WarningIconType type) const;
     const QPixmap* getTierImage(TierType type) const;
+    const QPixmap* getSteeringWheel() const;
 
 private:
     // QMovie cannot be stored by value in arrays -> keep as pointers
@@ -82,6 +84,7 @@ private:
     std::array<QPixmap, static_cast<size_t>(WarningIconType::MAX_ICON_TYPES)> warningIcons{};
     std::array<QPixmap, static_cast<size_t>(DefaultImageType::MAX_IMAGE_TYPES)> defaultImages{};
     std::array<QPixmap, static_cast<size_t>(TierType::MAX_TIER_TYPES)> tierImages{};
+    QPixmap steeringWheel;
 };
 
 #endif // IMAGE_DATA_H
