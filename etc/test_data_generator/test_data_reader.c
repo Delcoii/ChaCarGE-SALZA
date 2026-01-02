@@ -16,6 +16,8 @@
 // Global pointer for cleanup
 ShmIntegrated* g_p_shm = NULL;
 int keep_running = 1;
+int count_turn = 0;
+int count_bump = 0;
 
 // Signal Handler (Ctrl+C)
 void signal_handler(int sig) {
@@ -46,9 +48,13 @@ const char* get_traffic_str(int status) {
 // Helper: Convert Score Type Enum to String
 const char* get_score_type_str(int type) {
     switch (type) {
-        case SCORE_BUMP:          return "SPEED BUMP";
+        case SCORE_BUMP:
+            count_bump++;
+            return "SPEED BUMP";
         case SCORE_SUDDEN_ACCEL:  return "SUDDEN ACCEL/BRAKE 🚀";
-        case SCORE_SUDDEN_CURVE:  return "SUDDEN CURVE ⤵️";
+        case SCORE_SUDDEN_CURVE:
+            count_turn++;
+            return "SUDDEN CURVE ⤵️";
         case SCORE_IGNORE_SIGN:   return "SIGNAL VIOLATION 🚨";
         case SCORE_TYPE_NONE:     return "Safe Driving ✅";
         default:                  return "Unknown";
@@ -114,6 +120,9 @@ int main() {
                g_p_shm->generated_info.driving_score.total_score); // Cyan
         
         printf("\n===================================================\n");
+        printf(" Total Sudden Turns Detected: %d \n", count_turn);
+        printf(" Total Speed Bumps Detected : %d \n", count_bump);
+        printf("===================================================\n");
         printf(" UI Refresh Rate: 10Hz (Precision Mode) \n");
 
         // --- 2. Calculate Next Wake-up Time ---
@@ -124,6 +133,7 @@ int main() {
     }
 
     detach_shared_memory(g_p_shm);
+    destroy_shared_memory();
     printf("\n[Reader] Disconnected.\n");
     return 0;
 }
