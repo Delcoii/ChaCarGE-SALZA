@@ -66,12 +66,20 @@ def inference_process(shm_name):
     # =========================
     net = ncnn.Net()
     # Load optimized model params and bin
-    net.load_param("best_ncnn_model/model.ncnn.param")
-    net.load_model("best_ncnn_model/model.ncnn.bin")
+    # net.load_param("best_ncnn_model/model.ncnn.param")
+    # net.load_model("best_ncnn_model/model.ncnn.bin")
+    net.load_param("yolov8n_ncnn_model/model.ncnn.param")
+    net.load_model("yolov8n_ncnn_model/model.ncnn.bin")
     
     # Optimization settings
     net.opt.use_vulkan_compute = False # CPU only
     net.opt.num_threads = 4            # Use 4 cores
+    
+    # Enable ARM NEON optimization (FP16/INT8)
+    net.opt.use_fp16_packed = True
+    net.opt.use_fp16_storage = True
+    net.opt.use_fp16_arithmetic = True
+    net.opt.use_int8_inference = True
 
     print("[Inference NCNN] Model loaded successfully")
 

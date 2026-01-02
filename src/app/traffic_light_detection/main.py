@@ -1,7 +1,7 @@
 from multiprocessing import shared_memory, Process
 from camera_process import camera_process
-# from inference_process import inference_process
-from inference_process_ncnn import inference_process
+from inference_process import inference_process
+# from inference_process_ncnn import inference_process
 from can_process import can_process
 
 FRAME_W, FRAME_H, FRAME_C = 320, 240, 3
