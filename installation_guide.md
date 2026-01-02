@@ -41,7 +41,7 @@ find `/dev/video0` (need to fix)
 # onnx conversion
 yolo export model=best.pt format=onnx imgsz=640 opset=12 simplify=True
 
-yolo export model=best.pt format=ncnn imgsz=480
+# yolo export model=best.pt format=ncnn imgsz=480
 ```
 *   `imgsz=640`: input image size
 *   `simplify=True`: simplify ONNX model structure (using onnxsim)
@@ -53,5 +53,5 @@ yolo export model=best.pt format=ncnn imgsz=480
 ```bash
 # after activating virtual env
 cd src/app/traffic_light_detection
-python yolo_camera_real_test.py
+python main.py
 ```
