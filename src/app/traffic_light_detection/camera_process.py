@@ -3,7 +3,7 @@ import time
 import numpy as np
 from multiprocessing import shared_memory
 
-FRAME_W, FRAME_H, FRAME_C = 320, 240, 3
+FRAME_W, FRAME_H, FRAME_C = 640, 480, 3
 
 def camera_process(shm_name):
     # Open camera device
@@ -30,10 +30,7 @@ def camera_process(shm_name):
         # Copy the latest frame into shared memory
         frame_array[:] = frame[:FRAME_H, :FRAME_W, :]
 
-        # 시각화 (visualization)
-        cv2.imshow("Camera View", frame[:FRAME_H, :FRAME_W, :])
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        
 
         frame_count += 1
 
@@ -42,6 +39,10 @@ def camera_process(shm_name):
             print(f"[Camera] FPS={frame_count}")
             frame_count = 0
             start = time.time()
+
+        # cv2.imshow("Camera View", frame[:FRAME_H, :FRAME_W, :])
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     break
 
         # Small sleep to reduce CPU usage
         time.sleep(0.001)

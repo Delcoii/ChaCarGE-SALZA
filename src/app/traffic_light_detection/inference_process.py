@@ -13,14 +13,29 @@ MQ_NAME = "/traffic_sign_state"
 
 # traffic_sign_state definition
 # 0: NONE, 1: RED, 2: YELLOW, 3: GREEN
+# Model Output Class Index -> System State Code
 CLASS_MAP = {
     0: 3,  # green
     1: 1,  # red
     2: 2   # yellow
 }
 
+# Visualization Labels
+LABEL_MAP = {
+    0: "GREEN",
+    1: "RED",
+    2: "YELLOW"
+}
+
+# Colors for visualization (BGR)
+COLOR_MAP = {
+    0: (0, 255, 0),    # Green
+    1: (0, 0, 255),    # Red
+    2: (0, 255, 255)   # Yellow
+}
+
 # Confidence threshold for valid detection
-CONF_TH = 0.25
+CONF_TH = 0.50
 
 def preprocess(img):
     # Resize input image to model input size
@@ -40,7 +55,7 @@ def inference_process(shm_name):
     # =========================
     shm = shared_memory.SharedMemory(name=shm_name)
     frame_array = np.ndarray(
-        (240, 320, 3),
+        (480, 640, 3),
         dtype=np.uint8,
         buffer=shm.buf
     )
@@ -63,6 +78,7 @@ def inference_process(shm_name):
     # =========================
     session = ort.InferenceSession(
         "best_480.onnx",
+        # "best_480_int8.onnx",
         providers=["CPUExecutionProvider"]
     )
     input_name = session.get_inputs()[0].name
@@ -79,19 +95,53 @@ def inference_process(shm_name):
         output = session.run(None, {input_name: input_tensor})[0]
         output = np.squeeze(output)
 
+        # YOLOv8 output shape is usually (84, 8400) -> 4 box coords + 80 classes (here 3 classes)
+        # Transpose to (8400, 7) for easier handling if needed, or just work with cols
+        # output format: [cx, cy, w, h, class0_conf, class1_conf, class2_conf]
+        
         # Extract class confidence scores
+        # output shape: (4 + num_classes, num_anchors)
         scores = output[4:, :]
+        
+        # Find best detection
         best_idx = np.argmax(scores.max(axis=0))
         best_conf = scores[:, best_idx].max()
         best_class = np.argmax(scores[:, best_idx])
 
         # =========================
-        # Determine traffic_sign_state
+        # Determine traffic_sign_state & Visualize
         # =========================
+        traffic_sign_state = 0 # Default: NONE
+
         if best_conf > CONF_TH:
-            traffic_sign_state = CLASS_MAP[best_class]
-        else:
-            traffic_sign_state = 0  # NONE
+            traffic_sign_state = CLASS_MAP.get(best_class, 0)
+            
+            # --- Visualization Logic ---
+            # 1. Get box coordinates (normalized to 480x480 model input)
+            cx = output[0, best_idx]
+            cy = output[1, best_idx]
+            w = output[2, best_idx]
+            h = output[3, best_idx]
+
+            # 2. Scale coordinates back to original image (640x480)
+            # Model was trained on 480x480. Input image was resized from 640x480 to 480x480.
+            # So x-axis scale factor = 640 / 480, y-axis scale factor = 480 / 480 = 1
+            scale_x = 640 / 480
+            scale_y = 480 / 480
+
+            # Calculate top-left corner
+            x1 = int((cx - w/2) * scale_x)
+            y1 = int((cy - h/2) * scale_y)
+            x2 = int((cx + w/2) * scale_x)
+            y2 = int((cy + h/2) * scale_y)
+
+            # Draw Box
+            color = COLOR_MAP.get(best_class, (255, 255, 255))
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            
+            # Draw Label
+            label = f"{LABEL_MAP.get(best_class, 'Unknown')} {best_conf:.2f}"
+            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
         # =========================
         # Send result via POSIX Message Queue
@@ -100,7 +150,15 @@ def inference_process(shm_name):
 
         infer_ms = (time.perf_counter() - start) * 1000
 
+        # Draw inference time
+        cv2.putText(frame, f"Infer: {infer_ms:.1f}ms", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+        # Show Result
+        cv2.imshow("Detection Result", frame)
+        if cv2.waitKey(1) == ord('q'):
+            break
+
         print(
-            f"[MQ SEND] traffic_sign_state={traffic_sign_state} "
+            f"[Inference] traffic_sign_state={traffic_sign_state} "
             f"(conf={best_conf:.2f}, {infer_ms:.1f}ms)"
         )
