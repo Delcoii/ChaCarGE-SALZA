@@ -3,7 +3,7 @@ import time
 import numpy as np
 from multiprocessing import shared_memory
 
-FRAME_W, FRAME_H, FRAME_C = 640, 480, 3
+FRAME_W, FRAME_H, FRAME_C = 320, 240, 3
 
 def camera_process(shm_name):
     # Open camera device

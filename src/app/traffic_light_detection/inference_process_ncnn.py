@@ -43,7 +43,7 @@ def inference_process(shm_name):
     shm = shared_memory.SharedMemory(name=shm_name)
     # Note: main.py uses 640x480
     frame_array = np.ndarray(
-        (480, 640, 3),
+        (240, 320, 3),
         dtype=np.uint8,
         buffer=shm.buf
     )
@@ -75,7 +75,7 @@ def inference_process(shm_name):
 
     print("[Inference NCNN] Model loaded successfully")
 
-    target_size = 480
+    target_size = 320
     # YOLO normalization: 0~255 -> 0~1
     norm_vals = [1/255.0, 1/255.0, 1/255.0]
     mean_vals = [] 
@@ -94,7 +94,7 @@ def inference_process(shm_name):
         in_mat = ncnn.Mat.from_pixels_resize(
             frame, 
             ncnn.Mat.PixelType.PIXEL_BGR2RGB, 
-            640, 480, 
+            320, 240, 
             target_size, target_size
         )
         in_mat.substract_mean_normalize(mean_vals, norm_vals)
@@ -137,25 +137,25 @@ def inference_process(shm_name):
             traffic_sign_state = CLASS_MAP.get(best_class, 0)
             
             # --- Visualization ---
-            # cx = output[0, best_idx]
-            # cy = output[1, best_idx]
-            # w = output[2, best_idx]
-            # h = output[3, best_idx]
+            cx = output[0, best_idx]
+            cy = output[1, best_idx]
+            w = output[2, best_idx]
+            h = output[3, best_idx]
 
-            # # Scale coordinates back to 640x480
-            # scale_x = 640 / target_size
-            # scale_y = 480 / target_size
+            # Scale coordinates back to 640x480
+            scale_x = 640 / target_size
+            scale_y = 480 / target_size
 
-            # x1 = int((cx - w/2) * scale_x)
-            # y1 = int((cy - h/2) * scale_y)
-            # x2 = int((cx + w/2) * scale_x)
-            # y2 = int((cy + h/2) * scale_y)
+            x1 = int((cx - w/2) * scale_x)
+            y1 = int((cy - h/2) * scale_y)
+            x2 = int((cx + w/2) * scale_x)
+            y2 = int((cy + h/2) * scale_y)
 
-            # color = COLOR_MAP.get(best_class, (255, 255, 255))
-            # cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            color = COLOR_MAP.get(best_class, (255, 255, 255))
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             
-            # label = f"{LABEL_MAP.get(best_class, 'Unknown')} {best_conf:.2f}"
-            # cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            label = f"{LABEL_MAP.get(best_class, 'Unknown')} {best_conf:.2f}"
+            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
         # =========================
         # Send result via POSIX Message Queue
@@ -165,12 +165,12 @@ def inference_process(shm_name):
         infer_ms = (time.perf_counter() - start) * 1000
 
         # Draw inference time
-        # cv2.putText(frame, f"NCNN: {infer_ms:.1f}ms", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(frame, f"NCNN: {infer_ms:.1f}ms", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         # Show Result
-        # cv2.imshow("NCNN Result", frame)
-        # if cv2.waitKey(1) == ord('q'):
-        #     break
+        cv2.imshow("NCNN Result", frame)
+        if cv2.waitKey(1) == ord('q'):
+            break
 
         print(
             f"[MQ SEND] traffic_sign_state={traffic_sign_state} "
