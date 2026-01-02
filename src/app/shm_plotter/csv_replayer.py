@@ -54,10 +54,17 @@ def main():
 
     # Check Shared Memory Connection
     SHM_NAME = "/dev/shm/shm_integrated"
+    SHM_SIZE = ctypes.sizeof(ShmIntegrated)
     if not os.path.exists(SHM_NAME):
-        print("[Error] Shared Memory not found.")
-        print(">> Please run the Generator first (even briefly) to create the memory.")
-        return
+        print("[System] Shared Memory not found. Creating new one...")
+        try:
+            # Create a file in /dev/shm and set its size
+            with open(SHM_NAME, "wb") as f:
+                f.truncate(SHM_SIZE) # Resize file to match struct size
+            print(f"[System] Created {SHM_NAME} ({SHM_SIZE} bytes)")
+        except PermissionError:
+            print("[Error] Permission denied. Cannot create shared memory.")
+            return
 
     # Connect to Shared Memory
     try:

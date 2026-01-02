@@ -1,10 +1,10 @@
 {
     "curScores": {
-        "RAPID_ACCELERATIONS": 38,
-        "SHARP_TURNS": 54,
+        "RAPID_ACCELERATIONS": 255,
+        "SHARP_TURNS": 255,
         "SIGNAL_VIOLATIONS": 98,
         "SPEED_BUMPS": 89
     },
-    "userScore": 0,
-    "username": "탱크 전진"
+    "userScore": 65535,
+    "username": "Tank Junjin"
 }
