@@ -6,6 +6,11 @@ from multiprocessing import shared_memory
 import posix_ipc
 import struct
 
+# target_frame_x = 640
+# target_frame_y = 480
+target_frame_x = 320
+target_frame_y = 240
+
 # =========================
 # POSIX Message Queue specification (fixed)
 # =========================
@@ -55,7 +60,7 @@ def inference_process(shm_name):
     # =========================
     shm = shared_memory.SharedMemory(name=shm_name)
     frame_array = np.ndarray(
-        (480, 640, 3),
+        (target_frame_y, target_frame_x, 3),
         dtype=np.uint8,
         buffer=shm.buf
     )
@@ -126,8 +131,8 @@ def inference_process(shm_name):
             # 2. Scale coordinates back to original image (640x480)
             # Model was trained on 480x480. Input image was resized from 640x480 to 480x480.
             # So x-axis scale factor = 640 / 480, y-axis scale factor = 480 / 480 = 1
-            scale_x = 640 / 480
-            scale_y = 480 / 480
+            scale_x = target_frame_x / 480
+            scale_y = target_frame_y / 480
 
             # Calculate top-left corner
             x1 = int((cx - w/2) * scale_x)
