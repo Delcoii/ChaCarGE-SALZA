@@ -26,7 +26,7 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     , baseData(base)
     , renderingData(rendering)
 {
-    setMinimumSize(WindowSize::WIDTH, WindowSize::HEIGHT);
+    setMinimumSize(static_cast<int>(WindowSize::WIDTH), static_cast<int>(WindowSize::HEIGHT));
     setStyleSheet("background: #0f1115; color: #e7e9ec; font-family: 'Helvetica Neue', Arial;");
 
     auto* root = new QVBoxLayout(this);
