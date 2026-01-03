@@ -30,6 +30,7 @@ void RenderingData::composeFrame(RenderPayload& payload) {
     payload.rawSignSignal = frame.rawData.signSignal;
     payload.rawWarningSignal = frame.warningSignal;
     payload.rawEmotionSignal = frame.emotion;
+    payload.scoreDirection = frame.scoreDirection;
 
     payload.signType = toSignType(frame.rawData.signSignal);
     payload.warningType = toWarningType(frame.warningSignal);

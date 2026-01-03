@@ -31,6 +31,7 @@ public:
 
         
         uint8_t emotion;
+        uint8_t scoreDirection;
 
         // UserData
         UserData& userData;  // user data reference
@@ -54,7 +55,7 @@ public:
     FrameData getFrameDataCopy() const;
 
     // Temporary setter for prototyping/demo; replace with thread-safe updater later.
-    void setFrameSignals(const RawData& rawData, uint8_t warningSignal, uint8_t emotion, uint8_t displayType);
+    void setFrameSignals(const RawData& rawData, uint8_t warningSignal, uint8_t emotion, uint8_t scoreDirection, uint8_t displayType);
     uint8_t getCurDisplayType() const;
 
 private:

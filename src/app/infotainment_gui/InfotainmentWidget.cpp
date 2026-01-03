@@ -11,6 +11,8 @@
 #include <QColor>
 #include <algorithm>
 #include <QTimer>
+#include <QDateTime>
+#include <QTimeZone>
 #include "UserData.h"
 #include "Common.h"
 
@@ -79,6 +81,19 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
 
     gifLabel = createImageLabel(360, 360);
     gifLabel->setStyleSheet("background: #1a1d24; border: 1px solid #2a2f3a; border-radius: 12px;");
+    auto* gifLayout = new QVBoxLayout(gifLabel);
+    gifLayout->setContentsMargins(8, 8, 8, 8);
+    gifLayout->setSpacing(4);
+    dateLabel = new QLabel(gifLabel);
+    dateLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    dateLabel->setStyleSheet("color: #9ba0aa; font-size: 16px;");
+    timeLabel = new QLabel(gifLabel);
+    timeLabel->setAlignment(Qt::AlignCenter);
+    timeLabel->setStyleSheet("color: #e7e9ec; font-size: 40px; font-weight: 800;");
+    gifLayout->addWidget(dateLabel, 0, Qt::AlignHCenter | Qt::AlignTop);
+    gifLayout->addWidget(timeLabel, 1, Qt::AlignCenter);
+    dateLabel->hide();
+    timeLabel->hide();
     contentRow->addWidget(gifLabel, 0, Qt::AlignLeft | Qt::AlignVCenter);
 
     warningLabel = createImageLabel(200, 200);
@@ -294,12 +309,48 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     if (!happyGif) happyGif = imageData.getEmotionGif(ImageData::EmotionGifType::HAPPY);
     if (!badGif)   badGif   = imageData.getEmotionGif(ImageData::EmotionGifType::BAD_FACE);
 
-    if (happyGif) {
-        setGifMovie(happyGif, gifSizePx);
-    } else if (centerPix) {
-        setPixmapToLabel(gifLabel, centerPix, centerSize, centerSize, "Center?");
+    // Update direction state (PLUS/MINUS shows emoji for a short time; NORMAL shows clock)
+    const bool expired = directionTimer.isValid() && directionTimer.elapsed() >= directionShowMs;
+    if ((activeDirection == ScoreDirection::SCORE_PLUS || activeDirection == ScoreDirection::SCORE_MINUS) && expired) {
+        activeDirection = ScoreDirection::SCORE_NORMAL;
+    }
+    const ScoreDirection incoming = static_cast<ScoreDirection>(payload.scoreDirection);
+    if (incoming == ScoreDirection::SCORE_PLUS || incoming == ScoreDirection::SCORE_MINUS) {
+        activeDirection = incoming;
+        directionTimer.restart();
+    } else if (incoming == ScoreDirection::SCORE_NORMAL &&
+               (activeDirection == ScoreDirection::SCORE_PLUS || activeDirection == ScoreDirection::SCORE_MINUS) &&
+               !expired) {
+        // keep showing current reaction until timer expires
     } else {
-        gifLabel->setText("GIF missing");
+        activeDirection = ScoreDirection::SCORE_NORMAL;
+    }
+
+    const bool showEmoji = (activeDirection == ScoreDirection::SCORE_PLUS || activeDirection == ScoreDirection::SCORE_MINUS) &&
+                           (!directionTimer.isValid() || directionTimer.elapsed() < directionShowMs);
+
+    if (showEmoji) {
+        dateLabel->hide();
+        timeLabel->hide();
+        if (activeDirection == ScoreDirection::SCORE_PLUS && happyGif) {
+            setGifMovie(happyGif, gifSizePx);
+        } else if (activeDirection == ScoreDirection::SCORE_MINUS && badGif) {
+            setGifMovie(badGif, gifSizePx);
+        }
+    } else {
+        activeDirection = ScoreDirection::SCORE_NORMAL;
+        if (currentGif) {
+            currentGif->stop();
+            gifLabel->setMovie(nullptr);
+            currentGif = nullptr;
+        }
+        const auto now = QDateTime::currentDateTimeUtc().toTimeZone(QTimeZone("Asia/Seoul"));
+        dateLabel->setText(now.toString("yyyy.MM.dd"));
+        timeLabel->setText(now.toString("HH:mm"));
+        dateLabel->show();
+        timeLabel->show();
+        // clear any pixmap content behind the labels
+        gifLabel->setPixmap(QPixmap());
     }
 
     // Warning image height matches GIF; width scales to keep square
@@ -311,7 +362,6 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     // set warning image based on payload (no periodic flashing)
     if (payload.warningIcon) {
         setPixmapToLabel(warningLabel, payload.warningIcon, sideSizePx, sideSizePx, "");
-        if (badGif) setGifMovie(badGif, gifSizePx);
     } else {
         if (warningEmpty.isNull()) {
             warningEmpty = QPixmap(sideSizePx, sideSizePx);
@@ -386,7 +436,7 @@ void InfotainmentWidget::toggleDisplayType() {
     } else {
         nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::Dashboard);
     }
-    baseData.setFrameSignals(frame.rawData, frame.warningSignal, frame.emotion, nextDisplay);
+    baseData.setFrameSignals(frame.rawData, frame.warningSignal, frame.emotion, frame.scoreDirection, nextDisplay);
     // Immediate UI refresh to reflect the new mode without waiting on the renderer loop
     showFrame(renderingData.composeFrame());
 }

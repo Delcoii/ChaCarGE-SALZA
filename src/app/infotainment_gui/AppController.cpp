@@ -31,7 +31,7 @@ void AppController::start() {
 void AppController::stop() {
     running = false;
     auto frame = baseData.getFrameDataCopy();
-    baseData.setFrameSignals(frame.rawData, frame.warningSignal, frame.emotion, 4);
+    baseData.setFrameSignals(frame.rawData, frame.warningSignal, frame.emotion, frame.scoreDirection, 4);
 }
 
 void AppController::join() {
@@ -84,6 +84,7 @@ void AppController::producerLoop() {
         const DrivingScore& ds = shmPtr->generated_info.driving_score;
         uint8_t warningSignal = ds.score_type;
         double delta = ds.total_score;
+        uint8_t scoreDirection = ds.score_direction;
 
         // Map score_type -> UserData::ScoreType
         if (fabs(delta) > TOLERANCE_DOUBLE && warningSignal < static_cast<uint8_t>(UserData::ScoreType::MAX_SCORE_TYPES)) {
@@ -98,7 +99,7 @@ void AppController::producerLoop() {
             (delta < 0) ? static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE)
                         : static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
 
-        baseData.setFrameSignals(rawData, warningSignal, emotionEncoded, baseData.getCurDisplayType());
+        baseData.setFrameSignals(rawData, warningSignal, emotionEncoded, scoreDirection, baseData.getCurDisplayType());
 
         // Prepare latest frame for renderer/UI
         const int bufIdx = acquireRenderBuffer();

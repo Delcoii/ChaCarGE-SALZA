@@ -5,6 +5,7 @@ BaseData::BaseData()
         {0.0, 0.0, 0.0, 0}, // rawData
         0, // warningSignal
         0, // emotion
+        0, // scoreDirection
         UserData::getInstance(), // userData reference
         ImageData::getInstance(), // imageData reference
         0  // curDisplayType
@@ -22,11 +23,12 @@ BaseData::FrameData BaseData::getFrameDataCopy() const {
     return curFrameData;
 }
 
-void BaseData::setFrameSignals(const RawData& rawData, uint8_t warningSignal, uint8_t emotion, uint8_t displayType) {
+void BaseData::setFrameSignals(const RawData& rawData, uint8_t warningSignal, uint8_t emotion, uint8_t scoreDirection, uint8_t displayType) {
     std::lock_guard<std::mutex> lock(mtx);
     curFrameData.rawData = rawData;
     curFrameData.warningSignal = warningSignal;
     curFrameData.emotion = emotion;
+    curFrameData.scoreDirection = scoreDirection;
     curFrameData.curDisplayType = displayType;
 }
 

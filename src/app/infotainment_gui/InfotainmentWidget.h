@@ -2,9 +2,11 @@
 #define INFOTAINMENT_WIDGET_H
 
 #include <QWidget>
+#include <QElapsedTimer>
 #include <vector>
 #include "RenderingData.h"
 #include "ImageData.h"
+#include "ShmCompat.h"
 
 class QLabel;
 class QProgressBar;
@@ -48,6 +50,8 @@ private:
     QLabel* headerTitle = nullptr;
     QLabel* headerSubtitle = nullptr;
     QLabel* gifLabel = nullptr;
+    QLabel* timeLabel = nullptr;
+    QLabel* dateLabel = nullptr;
     QLabel* bumpLabel = nullptr;
     QLabel* regalLabel = nullptr;
     QLabel* overLabel = nullptr;
@@ -69,6 +73,9 @@ private:
     QMovie* happyGif = nullptr;
     QMovie* badGif = nullptr;
     QMovie* currentGif = nullptr;
+    ScoreDirection activeDirection = ScoreDirection::SCORE_NORMAL;
+    QElapsedTimer directionTimer;
+    int directionShowMs = 3000;
     int gifSizePx = 0;
     int lastFilled = 0;
     QProgressBar* throttleBar = nullptr;
