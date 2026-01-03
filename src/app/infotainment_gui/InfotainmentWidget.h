@@ -61,7 +61,6 @@ private:
     QLabel* tierLabel = nullptr;
 class QPushButton* toggleBtn = nullptr;
     class QFrame* centerDivider = nullptr;
-    class QSpacerItem* contentLeftSpacer = nullptr;
     struct DetailRow { QLabel* name; QProgressBar* bar; QLabel* value; };
     std::vector<DetailRow> detailRows;
     std::vector<QLabel*> diamondLabels;
@@ -87,9 +86,7 @@ class QPushButton* toggleBtn = nullptr;
     QLabel* brakeLabel = nullptr;
     QLabel* steeringLabel = nullptr;
     QLabel* steeringTextLabel = nullptr;
-    class QSpacerItem* gaugeLeftSpacer = nullptr;
-    class QSpacerItem* gaugeMidSpacer = nullptr;
-    class QSpacerItem* gaugeRightSpacer = nullptr;
+    class QHBoxLayout* gaugeRow = nullptr;
     const QPixmap* steeringWheelPix = nullptr;
 };
 

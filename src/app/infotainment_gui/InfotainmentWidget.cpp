@@ -96,8 +96,6 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     gifLayout->addWidget(timeLabel, 1, Qt::AlignCenter);
     dateLabel->hide();
     timeLabel->hide();
-    contentLeftSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
-    contentRow->addSpacerItem(contentLeftSpacer);
     contentRow->addWidget(gifLabel, 0, Qt::AlignLeft | Qt::AlignVCenter);
 
     centerDivider = new QFrame(this);
@@ -121,13 +119,10 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     body->addLayout(contentRow, 1);
 
     // Accel / Brake gauges (vertical, labels below)
-    auto* gaugeRow = new QHBoxLayout();
+    gaugeRow = new QHBoxLayout();
     gaugeRow->setContentsMargins(0, 0, 0, 0);
     gaugeRow->setSpacing(12);
-    gaugeLeftSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
-    gaugeMidSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
-    gaugeRightSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
-    gaugeRow->addSpacerItem(gaugeLeftSpacer);
+    gaugeRow->addStretch();
 
     struct GaugeWidgets {
         QProgressBar* bar;
@@ -179,10 +174,9 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     steeringCol->addWidget(steeringTextLabel, 0, Qt::AlignHCenter | Qt::AlignTop);
 
     gaugeRow->addLayout(steeringCol);
-    gaugeRow->addSpacerItem(gaugeMidSpacer);
     gaugeRow->addLayout(accelGauge.layout);
     gaugeRow->addLayout(brakeGauge.layout);
-    gaugeRow->addSpacerItem(gaugeRightSpacer);
+    gaugeRow->addStretch();
 
     body->addLayout(gaugeRow);
     stack->addWidget(mainContainer);
@@ -313,26 +307,27 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     const bool hasTraffic = (payload.rawSignSignal != 0) && payload.signImage;
     setPixmapToLabel(signalLabel, hasTraffic ? payload.signImage : nullptr, sigSide, sigSide, "");
 
-    const int w = width();
-    const int h = height();
-    const int leftMargin = static_cast<int>(w * 0.10);
-    const int rightMargin = static_cast<int>(w * 0.10);
+    const double fx = width() / 800.0;
+    const double fy = height() / 600.0;
+    const int leftMargin = static_cast<int>(50 * fx);
+    const int rightMargin = static_cast<int>(50 * fx);
+    const int topMargin = static_cast<int>(150 * fy);
+    const int bottomMargin = static_cast<int>(150 * fy);
     if (contentRow) {
-        contentRow->setContentsMargins(leftMargin, static_cast<int>(h * 0.30), rightMargin, static_cast<int>(h * 0.30));
+        contentRow->setContentsMargins(leftMargin, topMargin, rightMargin, bottomMargin);
+        contentRow->setSpacing(static_cast<int>(100 * fx)); // gap between gif and warning
     }
 
-    const int centerW = static_cast<int>(w * 0.35); // 1/10 ~ 4.5/10
-    const int centerH = static_cast<int>(h * 0.4);  // 3/10 ~ 7/10
+    const int centerW = static_cast<int>(300 * fx);
+    const int centerH = static_cast<int>(300 * fy);
     const int gifSize = std::min(centerW, centerH);
     gifSizePx = gifSize;                                      // keep stable target
     gifLabel->setMinimumSize(centerW, centerH);
     gifLabel->setMaximumSize(centerW, centerH);
-    if (contentLeftSpacer) {
-        contentLeftSpacer->changeSize(static_cast<int>(w * 0.10), 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
-    }
     if (centerDivider) {
         centerDivider->setFixedHeight(centerH);
     }
+    warningLabel->setFixedSize(centerW, centerH);
     const QPixmap* centerPix = hasTraffic ? payload.signImage : nullptr;
     // cache movies
     if (!happyGif) happyGif = imageData.getEmotionGif(ImageData::EmotionGifType::HAPPY);
@@ -399,14 +394,14 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         warningLabel->setPixmap(warningEmpty);
     }
 
-    // Gauge sizing based on window ratios (bottom band 8/10~10/10)
-    const int gaugeHeight = static_cast<int>(h * 0.20);
-    const int steerWidth = static_cast<int>(w * 0.15);
-    const int gaugeWidth = static_cast<int>(w * 0.10);
-    if (gaugeLeftSpacer) gaugeLeftSpacer->changeSize(static_cast<int>(w * 0.05), 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
-    if (gaugeMidSpacer) gaugeMidSpacer->changeSize(static_cast<int>(w * 0.02), 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
-    if (gaugeRightSpacer) gaugeRightSpacer->changeSize(static_cast<int>(w * 0.05), 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
-
+    // Gauge sizing based on target positions (approximate scaling from 800x600)
+    const int gaugeHeight = static_cast<int>(130 * fy); // 460~590 -> 130px
+    const int steerWidth = static_cast<int>(100 * fx);
+    const int gaugeWidth = static_cast<int>(50 * fx);
+    if (gaugeRow) {
+        gaugeRow->setContentsMargins(static_cast<int>(50 * fx), static_cast<int>(10 * fy), static_cast<int>(w - 260 * fx), 0);
+        gaugeRow->setSpacing(static_cast<int>(5 * fx));
+    }
     if (steeringLabel) {
         steeringLabel->setFixedSize(steerWidth, gaugeHeight);
     }
