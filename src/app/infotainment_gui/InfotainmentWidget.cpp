@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <QTimer>
 #include "UserData.h"
+#include "Common.h"
 
 InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, RenderingData& rendering, QWidget* parent)
     : QWidget(parent)
@@ -25,7 +26,7 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     , baseData(base)
     , renderingData(rendering)
 {
-    setMinimumSize(1512, 982);
+    setMinimumSize(WindowSize::WIDTH, WindowSize::HEIGHT);
     setStyleSheet("background: #0f1115; color: #e7e9ec; font-family: 'Helvetica Neue', Arial;");
 
     auto* root = new QVBoxLayout(this);
