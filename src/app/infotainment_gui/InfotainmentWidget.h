@@ -13,6 +13,7 @@ class QProgressBar;
 class QStackedLayout;
 class QHBoxLayout;
 class QPushButton;
+class QSpacerItem;
 
 class InfotainmentWidget : public QWidget {
 public:
@@ -49,6 +50,8 @@ private:
     QWidget* detailContainer = nullptr;
     class QStackedLayout* stack = nullptr;
     class QHBoxLayout* contentRow = nullptr;
+    class QSpacerItem* topSpacer = nullptr;
+    class QSpacerItem* midSpacer = nullptr;
 
     QLabel* signalLabel = nullptr;
     QLabel* headerTitle = nullptr;

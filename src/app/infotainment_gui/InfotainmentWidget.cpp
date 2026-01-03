@@ -74,6 +74,8 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
         diamondRow->addWidget(d);
     }
     body->addLayout(diamondRow);
+    topSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
+    body->addSpacerItem(topSpacer);
 
     // Content row: GIF left, warning centered in remaining space
     contentRow = new QHBoxLayout();
@@ -117,6 +119,8 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     contentRow->addWidget(warningContainer, 0, Qt::AlignLeft | Qt::AlignVCenter);
 
     body->addLayout(contentRow, 1);
+    midSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
+    body->addSpacerItem(midSpacer);
 
     // Accel / Brake gauges (vertical, labels below)
     gaugeRow = new QHBoxLayout();
@@ -316,8 +320,14 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     const int topMargin = static_cast<int>(150 * fy);
     const int bottomMargin = static_cast<int>(150 * fy);
     if (contentRow) {
-        contentRow->setContentsMargins(leftMargin, topMargin, rightMargin, bottomMargin);
+        contentRow->setContentsMargins(leftMargin, 0, rightMargin, 0);
         contentRow->setSpacing(static_cast<int>(100 * fx)); // gap between gif and warning
+    }
+    if (topSpacer) {
+        topSpacer->changeSize(0, static_cast<int>(150 * fy), QSizePolicy::Fixed, QSizePolicy::Fixed);
+    }
+    if (midSpacer) {
+        midSpacer->changeSize(0, static_cast<int>(10 * fy), QSizePolicy::Fixed, QSizePolicy::Fixed);
     }
 
     const int centerW = static_cast<int>(300 * fx);
