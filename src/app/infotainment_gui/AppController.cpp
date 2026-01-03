@@ -100,9 +100,6 @@ void AppController::producerLoop() {
 
         baseData.setFrameSignals(rawData, warningSignal, emotionEncoded, baseData.getCurDisplayType());
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        if (baseData.getCurDisplayType() == 4) break;
-
         // Prepare latest frame for renderer/UI
         const int bufIdx = acquireRenderBuffer();
         if (bufIdx >= 0) {
@@ -113,6 +110,9 @@ void AppController::producerLoop() {
                 releaseRenderBuffer(prev);
             }
         }
+        
+        if (baseData.getCurDisplayType() == 4) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
