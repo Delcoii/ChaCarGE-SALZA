@@ -309,6 +309,8 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
 
     const double fx = width() / 800.0;
     const double fy = height() / 600.0;
+    const int w = width();
+    const int h = height();
     const int leftMargin = static_cast<int>(50 * fx);
     const int rightMargin = static_cast<int>(50 * fx);
     const int topMargin = static_cast<int>(150 * fy);
@@ -399,7 +401,10 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     const int steerWidth = static_cast<int>(100 * fx);
     const int gaugeWidth = static_cast<int>(50 * fx);
     if (gaugeRow) {
-        gaugeRow->setContentsMargins(static_cast<int>(50 * fx), static_cast<int>(10 * fy), static_cast<int>(w - 260 * fx), 0);
+        const int left = static_cast<int>(50 * fx);
+        const int top = static_cast<int>(10 * fy);
+        const int right = std::max(0, w - static_cast<int>(260 * fx) - left);
+        gaugeRow->setContentsMargins(left, top, right, 0);
         gaugeRow->setSpacing(static_cast<int>(5 * fx));
     }
     if (steeringLabel) {

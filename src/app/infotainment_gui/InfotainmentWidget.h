@@ -10,6 +10,9 @@
 
 class QLabel;
 class QProgressBar;
+class QStackedLayout;
+class QHBoxLayout;
+class QPushButton;
 
 class InfotainmentWidget : public QWidget {
 public:
