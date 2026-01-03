@@ -50,12 +50,12 @@ def can_process():
             traffic_sign_state = struct.unpack("i", msg)[0]
             state_str = STATE_STR.get(traffic_sign_state, "UNKNOWN")
 
-            print(
-                f"[CAN][MQ RX] ts={recv_ts:.3f} "
-                f"raw={msg} "
-                f"state={traffic_sign_state} ({state_str})",
-                flush=True
-            )
+            # print(
+            #     f"[CAN][MQ RX] ts={recv_ts:.3f} "
+            #     f"raw={msg} "
+            #     f"state={traffic_sign_state} ({state_str})",
+            #     flush=True
+            # )
 
             # =========================
             # 2. Build CAN frame
@@ -66,11 +66,11 @@ def can_process():
                 is_extended_id=False
             )
 
-            print(
-                f"[CAN][BUILD] ID=0x{CAN_ID:X} "
-                f"DLC=1 DATA=[{traffic_sign_state}]",
-                flush=True
-            )
+            # print(
+            #     f"[CAN][BUILD] ID=0x{CAN_ID:X} "
+            #     f"DLC=1 DATA=[{traffic_sign_state}]",
+            #     flush=True
+            # )
 
             # =========================
             # 3. Send CAN frame
@@ -78,12 +78,12 @@ def can_process():
             bus.send(can_msg)
             send_ts = time.time()
 
-            print(
-                f"[CAN][TX OK] ts={send_ts:.3f} "
-                f"ID=0x{CAN_ID:X} "
-                f"STATE={traffic_sign_state} ({state_str})",
-                flush=True
-            )
+            # no duration!
+            # print(
+            #     f"[CAN] op_time = {send_ts - recv_ts:.3f} "
+            #     f"STATE={traffic_sign_state} ({state_str})",
+            #     flush=True
+            # )
 
         except can.CanError as e:
             print(f"[CAN][TX FAIL] CAN send error: {e}", flush=True)

@@ -26,6 +26,25 @@ typedef struct {
     ScoreSegment history[MAX_SEGMENT_HISTORY];
     uint8_t current_seg_idx; // Current segment index (0 ~ 5)
     uint8_t is_first_loop;   // Flag for the first loop execution
+
+    // Moving Average for AccZ
+    double acc_z_buffer[MAX_WINDOW_SIZE];    // buffer for AccZ values
+    uint32_t acc_z_idx;                     // current index in the buffer
+    double acc_z_sum;                       // sum of values in the buffer
+    uint32_t is_buffer_full;                // flag indicating if buffer is full
+
+    // Calibration AccZ
+    double bias_acc_z;
+    
+    // Throttle Rate Calculation
+    double prev_throttle;
+
+    // Traffic Logic
+    uint8_t prev_traffic_state;
+
+    // State Variables for avoiding repeated event detection
+    uint8_t is_continuous_event_active;     // flag for sudden curve/accel
+    uint16_t bump_cooldown_ticks;           // cooldown timer for bump events
 } AlgoState;
 
 // Function Declarations
