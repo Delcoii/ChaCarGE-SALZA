@@ -45,6 +45,7 @@ private:
     QWidget* scoreContainer = nullptr;
     QWidget* detailContainer = nullptr;
     class QStackedLayout* stack = nullptr;
+    class QHBoxLayout* contentRow = nullptr;
 
     QLabel* signalLabel = nullptr;
     QLabel* headerTitle = nullptr;
@@ -58,7 +59,9 @@ private:
     QLabel* turnLabel = nullptr;
     QLabel* scoreValueLabel = nullptr;
     QLabel* tierLabel = nullptr;
-    class QPushButton* toggleBtn = nullptr;
+class QPushButton* toggleBtn = nullptr;
+    class QFrame* centerDivider = nullptr;
+    class QSpacerItem* contentLeftSpacer = nullptr;
     struct DetailRow { QLabel* name; QProgressBar* bar; QLabel* value; };
     std::vector<DetailRow> detailRows;
     std::vector<QLabel*> diamondLabels;
@@ -84,6 +87,9 @@ private:
     QLabel* brakeLabel = nullptr;
     QLabel* steeringLabel = nullptr;
     QLabel* steeringTextLabel = nullptr;
+    class QSpacerItem* gaugeLeftSpacer = nullptr;
+    class QSpacerItem* gaugeMidSpacer = nullptr;
+    class QSpacerItem* gaugeRightSpacer = nullptr;
     const QPixmap* steeringWheelPix = nullptr;
 };
 

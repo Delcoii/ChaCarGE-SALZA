@@ -9,6 +9,8 @@
 #include <QPainter>
 #include <QTransform>
 #include <QColor>
+#include <QFrame>
+#include <QSpacerItem>
 #include <algorithm>
 #include <QTimer>
 #include <QDateTime>
@@ -67,14 +69,14 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     diamondLabels.reserve(20);
     for (int i = 0; i < 20; ++i) {
         auto* d = new QLabel(this);
-        d->setFixedSize(18, 8);
+        d->setFixedSize(18, 16);
         diamondLabels.push_back(d);
         diamondRow->addWidget(d);
     }
     body->addLayout(diamondRow);
 
     // Content row: GIF left, warning centered in remaining space
-    auto* contentRow = new QHBoxLayout();
+    contentRow = new QHBoxLayout();
     contentRow->setContentsMargins(0, 0, 0, 0);
     contentRow->setSpacing(0);
     contentRow->setAlignment(Qt::AlignVCenter);
@@ -94,7 +96,15 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     gifLayout->addWidget(timeLabel, 1, Qt::AlignCenter);
     dateLabel->hide();
     timeLabel->hide();
+    contentLeftSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+    contentRow->addSpacerItem(contentLeftSpacer);
     contentRow->addWidget(gifLabel, 0, Qt::AlignLeft | Qt::AlignVCenter);
+
+    centerDivider = new QFrame(this);
+    centerDivider->setFrameShape(QFrame::VLine);
+    centerDivider->setFrameShadow(QFrame::Plain);
+    centerDivider->setStyleSheet("color: #2a2f3a; background: #2a2f3a;");
+    contentRow->addWidget(centerDivider, 0, Qt::AlignVCenter);
 
     warningLabel = createImageLabel(200, 200);
     warningLabel->setStyleSheet("background: transparent;");
@@ -106,15 +116,18 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     warningWrap->addStretch();
     auto* warningContainer = new QWidget(this);
     warningContainer->setLayout(warningWrap);
-    contentRow->addWidget(warningContainer, 1);
+    contentRow->addWidget(warningContainer, 0, Qt::AlignLeft | Qt::AlignVCenter);
 
     body->addLayout(contentRow, 1);
 
     // Accel / Brake gauges (vertical, labels below)
     auto* gaugeRow = new QHBoxLayout();
-    gaugeRow->setContentsMargins(12, 4, 12, 4);
-    gaugeRow->setSpacing(32);
-    gaugeRow->addStretch();
+    gaugeRow->setContentsMargins(0, 0, 0, 0);
+    gaugeRow->setSpacing(12);
+    gaugeLeftSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+    gaugeMidSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+    gaugeRightSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+    gaugeRow->addSpacerItem(gaugeLeftSpacer);
 
     struct GaugeWidgets {
         QProgressBar* bar;
@@ -145,16 +158,13 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
         return {bar, lbl, column};
     };
 
-    auto accelGauge = makeGauge("Accel", " background: qlineargradient(x1:0, y1:1, x2:0, y2:0, stop:0 #1f8a4d, stop:1 #2ecc71);");
+    auto accelGauge = makeGauge("A", " background: qlineargradient(x1:0, y1:1, x2:0, y2:0, stop:0 #1f8a4d, stop:1 #2ecc71);");
     throttleBar = accelGauge.bar;
     throttleLabel = accelGauge.label;
 
-    auto brakeGauge = makeGauge("Brake", " background: qlineargradient(x1:0, y1:1, x2:0, y2:0, stop:0 #8a1f1f, stop:1 #ff4d4d);");
+    auto brakeGauge = makeGauge("B", " background: qlineargradient(x1:0, y1:1, x2:0, y2:0, stop:0 #8a1f1f, stop:1 #ff4d4d);");
     brakeBar = brakeGauge.bar;
     brakeLabel = brakeGauge.label;
-
-    gaugeRow->addLayout(accelGauge.layout);
-    gaugeRow->addLayout(brakeGauge.layout);
 
     // Steering wheel
     auto* steeringCol = new QVBoxLayout();
@@ -162,14 +172,18 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     steeringCol->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
     steeringLabel = createImageLabel(140, 140);
     steeringLabel->setStyleSheet("background: transparent;");
-    steeringTextLabel = new QLabel("Steering Wheel", this);
+    steeringTextLabel = new QLabel("Steer", this);
     steeringTextLabel->setStyleSheet("font-size: 16px; font-weight: 700; color: #e7e9ec;");
     steeringTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
     steeringCol->addWidget(steeringLabel, 0, Qt::AlignHCenter | Qt::AlignBottom);
     steeringCol->addWidget(steeringTextLabel, 0, Qt::AlignHCenter | Qt::AlignTop);
 
     gaugeRow->addLayout(steeringCol);
-    gaugeRow->addStretch();
+    gaugeRow->addSpacerItem(gaugeMidSpacer);
+    gaugeRow->addLayout(accelGauge.layout);
+    gaugeRow->addLayout(brakeGauge.layout);
+    gaugeRow->addSpacerItem(gaugeRightSpacer);
+
     body->addLayout(gaugeRow);
     stack->addWidget(mainContainer);
 
@@ -279,7 +293,7 @@ void InfotainmentWidget::setPixmapToLabel(QLabel* label, const QPixmap* pix, int
 namespace {
 QPixmap makeSegmentPixmap(const QColor& fill, const QColor& border) {
     const int w = 18;
-    const int h = 8;
+    const int h = 16;
     QPixmap pm(w, h);
     pm.fill(Qt::transparent);
     QPainter p(&pm);
@@ -299,11 +313,26 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     const bool hasTraffic = (payload.rawSignSignal != 0) && payload.signImage;
     setPixmapToLabel(signalLabel, hasTraffic ? payload.signImage : nullptr, sigSide, sigSide, "");
 
-    const int centerSize = std::max(320, std::min(static_cast<int>(width() * 0.4), static_cast<int>(height() * 0.6)));
-    const int gifSize = static_cast<int>(centerSize * 2 / 3); // reduce to ~66%
+    const int w = width();
+    const int h = height();
+    const int leftMargin = static_cast<int>(w * 0.10);
+    const int rightMargin = static_cast<int>(w * 0.10);
+    if (contentRow) {
+        contentRow->setContentsMargins(leftMargin, static_cast<int>(h * 0.30), rightMargin, static_cast<int>(h * 0.30));
+    }
+
+    const int centerW = static_cast<int>(w * 0.35); // 1/10 ~ 4.5/10
+    const int centerH = static_cast<int>(h * 0.4);  // 3/10 ~ 7/10
+    const int gifSize = std::min(centerW, centerH);
     gifSizePx = gifSize;                                      // keep stable target
-    gifLabel->setMinimumSize(gifSize, gifSize);
-    gifLabel->setMaximumSize(gifSize, gifSize);
+    gifLabel->setMinimumSize(centerW, centerH);
+    gifLabel->setMaximumSize(centerW, centerH);
+    if (contentLeftSpacer) {
+        contentLeftSpacer->changeSize(static_cast<int>(w * 0.10), 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+    }
+    if (centerDivider) {
+        centerDivider->setFixedHeight(centerH);
+    }
     const QPixmap* centerPix = hasTraffic ? payload.signImage : nullptr;
     // cache movies
     if (!happyGif) happyGif = imageData.getEmotionGif(ImageData::EmotionGifType::HAPPY);
@@ -353,9 +382,9 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         gifLabel->setPixmap(QPixmap());
     }
 
-    // Warning image height matches GIF; width scales to keep square
+    // Warning image mirrors GIF area
     sideSizePx = gifSize;
-    warningLabel->setFixedSize(sideSizePx, sideSizePx);
+    warningLabel->setFixedSize(centerW, centerH);
 
     updateDiamondGauge(payload.userTotalScore);
 
@@ -369,6 +398,23 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         }
         warningLabel->setPixmap(warningEmpty);
     }
+
+    // Gauge sizing based on window ratios (bottom band 8/10~10/10)
+    const int gaugeHeight = static_cast<int>(h * 0.20);
+    const int steerWidth = static_cast<int>(w * 0.15);
+    const int gaugeWidth = static_cast<int>(w * 0.10);
+    if (gaugeLeftSpacer) gaugeLeftSpacer->changeSize(static_cast<int>(w * 0.05), 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+    if (gaugeMidSpacer) gaugeMidSpacer->changeSize(static_cast<int>(w * 0.02), 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+    if (gaugeRightSpacer) gaugeRightSpacer->changeSize(static_cast<int>(w * 0.05), 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+
+    if (steeringLabel) {
+        steeringLabel->setFixedSize(steerWidth, gaugeHeight);
+    }
+    if (throttleBar) throttleBar->setFixedSize(gaugeWidth, gaugeHeight);
+    if (brakeBar) brakeBar->setFixedSize(gaugeWidth, gaugeHeight);
+    if (steeringTextLabel) steeringTextLabel->setText("Steer");
+    if (throttleLabel) throttleLabel->setText("A");
+    if (brakeLabel) brakeLabel->setText("B");
 
     // throttle gauge update (0~100)
     if (throttleBar) {
