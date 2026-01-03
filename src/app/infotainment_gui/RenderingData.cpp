@@ -17,10 +17,10 @@ RenderingData& RenderingData::getInstance() {
     return instance;
 }
 
-RenderingData::RenderPayload RenderingData::composeFrame() {
+void RenderingData::composeFrame(RenderPayload& payload) {
     const BaseData::FrameData frame = baseData.getFrameDataCopy();
 
-    RenderPayload payload{};
+    payload = RenderPayload{};
     payload.displayType = toDisplayType(frame.curDisplayType);
 
     payload.throttle = std::clamp(frame.rawData.throttle, 0.0, 100.0);
@@ -77,7 +77,11 @@ RenderingData::RenderPayload RenderingData::composeFrame() {
     if (!payload.signImage && payload.signType != ImageData::SignType::NONE) {
         payload.signImage = imageData.getSignImage(payload.signType);
     }
+}
 
+RenderingData::RenderPayload RenderingData::composeFrame() {
+    RenderPayload payload{};
+    composeFrame(payload);
     return payload;
 }
 

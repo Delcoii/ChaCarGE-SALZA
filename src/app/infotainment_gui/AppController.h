@@ -1,8 +1,9 @@
 #ifndef APP_CONTROLLER_H
 #define APP_CONTROLLER_H
 
-#include <thread>
 #include <atomic>
+#include <array>
+#include <thread>
 #include <QString>
 
 #include "BaseData.h"
@@ -25,6 +26,11 @@ public:
 private:
     void producerLoop();
     void rendererLoop();
+    int acquireRenderBuffer();
+    void releaseRenderBuffer(int idx);
+
+    // Latest produced buffer index; renderer picks it up and resets to -1
+    std::atomic<int> latestReady{-1};
 
     BaseData& baseData;
     RenderingData& renderingData;
@@ -34,6 +40,11 @@ private:
     std::thread rendererThread;
     std::atomic<bool> running{false};
     ShmIntegrated* shmPtr = nullptr;
+
+    static constexpr int kRenderBufferCount = 3;
+    std::array<RenderingData::RenderPayload, kRenderBufferCount> renderBuffers{};
+    std::array<std::atomic<bool>, kRenderBufferCount> bufferInUse{{false, false, false}};
+    int nextWriteIndex = 0;
 };
 
 #endif // APP_CONTROLLER_H

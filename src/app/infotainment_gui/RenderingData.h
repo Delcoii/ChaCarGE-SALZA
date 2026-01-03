@@ -59,6 +59,7 @@ public:
     static RenderingData& getInstance();
 
     // Convert the current FrameData from BaseData into a RenderPayload
+    void composeFrame(RenderPayload& out);
     RenderPayload composeFrame();
 
 private:

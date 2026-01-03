@@ -2,6 +2,7 @@
 
 #include <QMetaObject>
 #include <QDir>
+#include <atomic>
 #include <chrono>
 #include <thread>
 #include <cmath>
@@ -83,6 +84,7 @@ void AppController::producerLoop() {
         uint8_t warningSignal = ds.score_type;
         int delta = static_cast<int>(std::llround(ds.total_score));
 
+        // Jaeyeon : Need to remove
         // Map score_type -> UserData::ScoreType
         auto& ud = UserData::getInstance();
         if (warningSignal < static_cast<uint8_t>(UserData::ScoreType::MAX_SCORE_TYPES)) {
@@ -90,7 +92,9 @@ void AppController::producerLoop() {
             ud.adjustCurScore(st, delta);
         }
         ud.adjustUserTotalScore(delta);
+        // Jaeyeon : Need to remove
 
+        // Jaeyeon : 잘했다, 못했다는 type은 필요해서 세원님이 이 타입은 보내줘야함. 
         uint8_t emotionEncoded =
             (delta < 0) ? static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE)
                         : static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
@@ -99,18 +103,55 @@ void AppController::producerLoop() {
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if (baseData.getCurDisplayType() == 4) break;
+
+        // Prepare latest frame for renderer/UI
+        const int bufIdx = acquireRenderBuffer();
+        if (bufIdx >= 0) {
+            renderingData.composeFrame(renderBuffers[bufIdx]);
+            // Keep only the freshest frame; drop any previously unconsumed buffer
+            const int prev = latestReady.exchange(bufIdx, std::memory_order_acq_rel);
+            if (prev >= 0 && prev != bufIdx) {
+                releaseRenderBuffer(prev);
+            }
+        }
     }
 }
 
 void AppController::rendererLoop() {
     while (running) {
-        auto payload = renderingData.composeFrame();
+        const int bufIdx = latestReady.exchange(-1, std::memory_order_acq_rel);
+        if (bufIdx < 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+
         QMetaObject::invokeMethod(
             &ui,
-            [payload, this]() { ui.showFrame(payload); },
+            [this, bufIdx]() {
+                ui.showFrame(renderBuffers[bufIdx]);
+                releaseRenderBuffer(bufIdx);
+            },
             Qt::QueuedConnection);
 
         if (baseData.getCurDisplayType() == 4) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+}
+
+int AppController::acquireRenderBuffer() {
+    const int startIdx = nextWriteIndex;
+    for (int i = 0; i < kRenderBufferCount; ++i) {
+        const int idx = (startIdx + i) % kRenderBufferCount;
+        bool expected = false;
+        if (bufferInUse[idx].compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+            nextWriteIndex = (idx + 1) % kRenderBufferCount;
+            return idx;
+        }
+    }
+    return -1;
+}
+
+void AppController::releaseRenderBuffer(int idx) {
+    if (idx < 0 || idx >= kRenderBufferCount) return;
+    bufferInUse[idx].store(false, std::memory_order_release);
 }
