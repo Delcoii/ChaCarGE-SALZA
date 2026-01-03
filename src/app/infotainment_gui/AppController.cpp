@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "Common.h"
 
 #include <QMetaObject>
 #include <QDir>
@@ -82,17 +83,15 @@ void AppController::producerLoop() {
         // Driving score
         const DrivingScore& ds = shmPtr->generated_info.driving_score;
         uint8_t warningSignal = ds.score_type;
-        int delta = static_cast<int>(std::llround(ds.total_score));
+        double delta = ds.total_score;
 
-        // Jaeyeon : Need to remove
         // Map score_type -> UserData::ScoreType
         auto& ud = UserData::getInstance();
-        if (warningSignal < static_cast<uint8_t>(UserData::ScoreType::MAX_SCORE_TYPES)) {
+        if (fabs(delta) > TOLERANCE_DOUBLE && warningSignal < static_cast<uint8_t>(UserData::ScoreType::MAX_SCORE_TYPES)) {
             auto st = static_cast<UserData::ScoreType>(warningSignal);
             ud.adjustCurScore(st, delta);
+            ud.adjustUserTotalScore(delta);
         }
-        ud.adjustUserTotalScore(delta);
-        // Jaeyeon : Need to remove
 
         // Jaeyeon : 잘했다, 못했다는 type은 필요해서 세원님이 이 타입은 보내줘야함. 
         uint8_t emotionEncoded =
