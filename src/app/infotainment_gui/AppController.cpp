@@ -86,13 +86,13 @@ void AppController::producerLoop() {
         double delta = ds.total_score;
 
         // Map score_type -> UserData::ScoreType
-        auto& ud = UserData::getInstance();
         if (fabs(delta) > TOLERANCE_DOUBLE && warningSignal < static_cast<uint8_t>(UserData::ScoreType::MAX_SCORE_TYPES)) {
+            auto& ud = UserData::getInstance();
             auto st = static_cast<UserData::ScoreType>(warningSignal);
             ud.adjustCurScore(st, delta);
             ud.adjustUserTotalScore(delta);
         }
-
+        
         // Jaeyeon : 잘했다, 못했다는 type은 필요해서 세원님이 이 타입은 보내줘야함. 
         uint8_t emotionEncoded =
             (delta < 0) ? static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE)
