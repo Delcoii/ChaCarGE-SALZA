@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 #include "BaseData.h"
 
@@ -23,6 +24,7 @@ public:
         Emotion = 3,     // Driver emotion GIF
         Dashboard = 4,   // Scores plus needed icons
         ScoreBoard = 5,  // Total score/tier screen
+        History = 6,     // Timeline summary of violations
         COUNT
     };
 
@@ -55,6 +57,9 @@ public:
         uint8_t rawWarningSignal = 0;
         uint8_t rawEmotionSignal = 0;
         uint8_t scoreDirection = 0;
+
+        bool useDrivingScoreCheckActive = false;
+        std::vector<BaseData::ViolationEvent> violations;
     };
 
     static RenderingData& getInstance();

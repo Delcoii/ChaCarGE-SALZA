@@ -10,6 +10,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QObject>
+#include <QByteArray>
 #include <thread>
 #include <chrono>
 #include <atomic>
@@ -22,6 +23,12 @@ QString makeAbsolutePath(const QString& relative) {
 }
 
 int main(int argc, char* argv[]) {
+    // Avoid unstable platform theme plugins
+    qputenv("QT_QPA_PLATFORMTHEME", QByteArray());
+    // Fallback for headless environments to avoid platform plugin crashes
+    if (!qEnvironmentVariableIsSet("DISPLAY") && !qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
+        qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
+    }
     QApplication app(argc, argv);
 
     UserData& userData = UserData::getInstance();

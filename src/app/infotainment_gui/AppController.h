@@ -4,6 +4,7 @@
 #include <atomic>
 #include <array>
 #include <thread>
+#include <vector>
 #include <QString>
 
 #include "BaseData.h"
@@ -40,6 +41,9 @@ private:
     std::thread rendererThread;
     std::atomic<bool> running{false};
     ShmIntegrated* shmPtr = nullptr;
+    bool lastUseDrivingCheck = false;
+    std::vector<BaseData::ViolationEvent> activeViolations;
+    uint8_t lastMinusType = 0xFF;
 
     static constexpr int kRenderBufferCount = 3;
     std::array<RenderingData::RenderPayload, kRenderBufferCount> renderBuffers{};
