@@ -27,9 +27,11 @@ private:
     void applyImages(const RenderingData::RenderPayload& payload);
     void applyScoreView(const RenderingData::RenderPayload& payload);
     void applyDetailView(const RenderingData::RenderPayload& payload);
+    void applyHistoryView(const RenderingData::RenderPayload& payload);
     void toggleDisplayType();
     void updateDiamondGauge(uint16_t score);
     void setGifMovie(QMovie* movie, int size);
+    const QPixmap* violationPixmap(uint8_t scoreType) const;
 
 private:
     const QPixmap* tierPix = nullptr;
@@ -41,12 +43,14 @@ private:
     QWidget* mainContainer = nullptr;
     QWidget* scoreContainer = nullptr;
     QWidget* detailContainer = nullptr;
+    QWidget* historyContainer = nullptr;
     class QStackedLayout* stack = nullptr;
     class QHBoxLayout* contentRow = nullptr;
     class QSpacerItem* topSpacer = nullptr;
 
     QLabel* signalLabel = nullptr;
     QLabel* headerTitle = nullptr;
+    QLabel* onOffLabel = nullptr;
     QLabel* gifLabel = nullptr;
     QLabel* timeLabel = nullptr;
     QLabel* dateLabel = nullptr;
@@ -54,6 +58,9 @@ private:
     QLabel* tierLabel = nullptr;
     class QPushButton* toggleBtn = nullptr;
     class QFrame* centerDivider = nullptr;
+    QLabel* historyEmptyLabel = nullptr;
+    class QGraphicsView* historyView = nullptr;
+    class QGraphicsScene* historyScene = nullptr;
     struct DetailRow { QLabel* name; QProgressBar* bar; QLabel* value; };
     std::vector<DetailRow> detailRows;
     std::vector<QLabel*> diamondLabels;
@@ -68,9 +75,9 @@ private:
     QMovie* currentGif = nullptr;
     ScoreDirection activeDirection = ScoreDirection::SCORE_NORMAL;
     QElapsedTimer directionTimer;
-    int directionShowMs = 4000;
+    int directionShowMs = 3000;
     QElapsedTimer warningTimer;
-    int warningShowMs = 4000;
+    int warningShowMs = 3000;
     int lastWarningSignal = -1;
     bool warningActive = false;
     const QPixmap* activeWarningPixmap = nullptr;

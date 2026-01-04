@@ -11,6 +11,10 @@
 #include <QColor>
 #include <QFrame>
 #include <QSpacerItem>
+#include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QGraphicsPixmapItem>
+#include <QGridLayout>
 #include <algorithm>
 #include <QTimer>
 #include <QDateTime>
@@ -47,6 +51,12 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     header->addLayout(nameSignalBox, 0);
 
     header->addStretch();
+    onOffLabel = new QLabel("OFF", this);
+    onOffLabel->setFixedHeight(24);
+    onOffLabel->setAlignment(Qt::AlignCenter);
+    onOffLabel->setStyleSheet("padding: 4px 8px; font-size: 12px; font-weight: 800; color: #ffffff; "
+                              "background: #d9534f; border-radius: 12px;");
+    header->addWidget(onOffLabel, 0, Qt::AlignRight | Qt::AlignTop);
     root->addLayout(header);
 
     stack = new QStackedLayout();
@@ -88,7 +98,7 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     timeLabel = new QLabel(gifLabel);
     timeLabel->setAlignment(Qt::AlignCenter);
     // Dial back the clock size so it fits more comfortably inside the GIF frame
-    timeLabel->setStyleSheet("color: #000000; font-size: 90px; font-weight: 800; font-stretch: 75;");
+    timeLabel->setStyleSheet("color: #000000; font-size: 90px; font-weight: 800;");
     gifLayout->addWidget(dateLabel, 0, Qt::AlignHCenter | Qt::AlignTop);
     gifLayout->addWidget(timeLabel, 1, Qt::AlignCenter);
     dateLabel->hide();
@@ -186,7 +196,11 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
 
     // Toggle button (bottom-right)
     toggleBtn = new QPushButton("Toggle View", this);
-    toggleBtn->setStyleSheet("background: #5dd1ff; color: #0f1115; font-weight: 700; padding: 10px 14px; border-radius: 10px;");
+    toggleBtn->setStyleSheet(
+        "QPushButton { background: #5dd1ff; color: #0f1115; font-weight: 700; padding: 10px 14px; border-radius: 10px; }"
+        "QPushButton:hover { background: #7de0ff; color: #0b0d11; transform: translateY(-1px); }"
+        "QPushButton:pressed { background: #3fc3f0; color: #0b0d11; }"
+    );
     connect(toggleBtn, &QPushButton::clicked, this, &InfotainmentWidget::toggleDisplayType);
     bottomBar->addWidget(toggleBtn, 0, Qt::AlignBottom | Qt::AlignRight);
 
@@ -237,6 +251,27 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     detailLayout->addStretch();
     stack->addWidget(detailContainer);
 
+    // History container (timeline view)
+    historyContainer = new QWidget(this);
+    auto* historyLayout = new QVBoxLayout(historyContainer);
+    historyLayout->setSpacing(10);
+    historyLayout->setContentsMargins(12, 12, 12, 12);
+    auto* historyTitle = new QLabel("Violation Timeline", this);
+    historyTitle->setStyleSheet("font-size: 22px; font-weight: 800; color: #0a4f91;");
+    historyLayout->addWidget(historyTitle, 0, Qt::AlignLeft);
+    historyEmptyLabel = new QLabel("No violations recorded for the last session.", this);
+    historyEmptyLabel->setStyleSheet("font-size: 14px; color: #444444;");
+    historyLayout->addWidget(historyEmptyLabel, 0, Qt::AlignLeft);
+    historyScene = new QGraphicsScene(this);
+    historyView = new QGraphicsView(historyContainer);
+    historyView->setScene(historyScene);
+    historyView->setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
+    historyView->setFrameShape(QFrame::NoFrame);
+    historyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    historyView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    historyLayout->addWidget(historyView, 1);
+    stack->addWidget(historyContainer);
+
     root->addLayout(stack, 1);
     root->addLayout(bottomBar, 0);
 
@@ -251,6 +286,13 @@ InfotainmentWidget::~InfotainmentWidget() = default;
 void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) {
     // Update username from UserData (via payload.userTotalScore owner)
     headerTitle->setText("Mr.Tele");
+    if (onOffLabel) {
+        const bool on = payload.useDrivingScoreCheckActive;
+        onOffLabel->setText(on ? "ON" : "OFF");
+        onOffLabel->setStyleSheet(on
+            ? "padding: 4px 8px; font-size: 12px; font-weight: 800; color: #ffffff; background: #1f8a4d; border-radius: 12px;"
+            : "padding: 4px 8px; font-size: 12px; font-weight: 800; color: #ffffff; background: #d9534f; border-radius: 12px;");
+    }
 
     const int incomingDisplay = static_cast<int>(payload.displayType);
     const bool displayChanged = (incomingDisplay != lastDisplayType);
@@ -268,9 +310,9 @@ void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) 
 
     // Only show gauges on the main dashboard-style views (hide on score/detail pages)
     const bool showGauges = payload.displayType != RenderingData::DisplayType::ScoreBoard &&
-                            payload.displayType != RenderingData::DisplayType::Emotion;
+                            payload.displayType != RenderingData::DisplayType::Emotion &&
+                            payload.displayType != RenderingData::DisplayType::History;
     if (gaugeContainer) {
-        const double fx = width() / 800.0;
         const double fy = height() / 600.0;
         const int gaugeHeight = static_cast<int>(130 * fy);
         gaugeContainer->setVisible(showGauges);
@@ -283,6 +325,9 @@ void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) 
     if (payload.displayType == RenderingData::DisplayType::ScoreBoard) {
         stack->setCurrentWidget(scoreContainer);
         applyScoreView(payload);
+    } else if (payload.displayType == RenderingData::DisplayType::History) {
+        stack->setCurrentWidget(historyContainer);
+        applyHistoryView(payload);
     } else if (payload.displayType == RenderingData::DisplayType::Emotion) {
         stack->setCurrentWidget(detailContainer);
         applyDetailView(payload);
@@ -319,6 +364,7 @@ ImageData::SignType warningSignFromScore(uint8_t raw) {
     case ScoreType::SCORE_OVER_SPEED: return ImageData::SignType::OVERSPEED;
     case ScoreType::SCORE_SUDDEN_ACCEL: return ImageData::SignType::OVERSPEED;
     case ScoreType::SCORE_SUDDEN_CURVE: return ImageData::SignType::OVERTURN;
+    case ScoreType::SCORE_IGNORE_SIGN: return ImageData::SignType::SIGNAL_VIOLATION;
     default: return ImageData::SignType::NONE;
     }
 }
@@ -347,7 +393,6 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
 
     const double fx = width() / 800.0;
     const double fy = height() / 600.0;
-    const int w = width();
     const int h = height();
     const int leftMargin = static_cast<int>(50 * fx);
     const int rightMargin = static_cast<int>(50 * fx);
@@ -386,7 +431,7 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         activeDirection = ScoreDirection::SCORE_NORMAL;
     }
 
-    const bool isSupportedWarning = payload.rawWarningSignal <= static_cast<uint8_t>(ScoreType::SCORE_SUDDEN_CURVE);
+    const bool isSupportedWarning = payload.rawWarningSignal <= static_cast<uint8_t>(ScoreType::SCORE_IGNORE_SIGN);
     const bool shouldActivate =
         forceApply ||
         (isSupportedWarning && (!warningActive || static_cast<int>(payload.rawWarningSignal) != lastWarningSignal));
@@ -531,12 +576,115 @@ void InfotainmentWidget::applyDetailView(const RenderingData::RenderPayload& pay
     }
 }
 
+const QPixmap* InfotainmentWidget::violationPixmap(uint8_t scoreType) const {
+    switch (static_cast<ScoreType>(scoreType)) {
+    case ScoreType::SCORE_BUMP: return imageData.getSignImage(ImageData::SignType::BUMP);
+    case ScoreType::SCORE_SUDDEN_ACCEL: return imageData.getSignImage(ImageData::SignType::OVERSPEED);
+    case ScoreType::SCORE_SUDDEN_CURVE: return imageData.getSignImage(ImageData::SignType::OVERTURN);
+    case ScoreType::SCORE_IGNORE_SIGN: return imageData.getSignImage(ImageData::SignType::SIGNAL_VIOLATION);
+    default: return nullptr;
+    }
+}
+
+void InfotainmentWidget::applyHistoryView(const RenderingData::RenderPayload& payload) {
+    if (!historyScene || !historyView) return;
+    historyScene->clear();
+
+    if (payload.violations.empty()) {
+        if (historyEmptyLabel) historyEmptyLabel->show();
+        historyView->setVisible(false);
+        return;
+    }
+    if (historyEmptyLabel) historyEmptyLabel->hide();
+    historyView->setVisible(true);
+
+    std::vector<BaseData::ViolationEvent> events = payload.violations;
+    std::sort(events.begin(), events.end(), [](const auto& a, const auto& b) {
+        return a.timestampMs < b.timestampMs;
+    });
+    const int64_t startMs = events.front().timestampMs;
+    const int64_t endMs = events.back().timestampMs;
+    const int64_t duration = std::max<int64_t>(1, endMs - startMs);
+
+    const int marginLeft = 90;
+    const int marginRight = 30;
+    const int marginTop = 20;
+    const int laneHeight = 80;
+    const int iconSize = 40;
+    const char* rowTitles[] = {"Bump", "Accel", "Curve", "Signal"};
+    const ScoreType rowTypes[] = {
+        ScoreType::SCORE_BUMP,
+        ScoreType::SCORE_SUDDEN_ACCEL,
+        ScoreType::SCORE_SUDDEN_CURVE,
+        ScoreType::SCORE_IGNORE_SIGN
+    };
+    const int rowCount = 4;
+
+    const int viewWidth = std::max(400, historyView->viewport()->width());
+    const int timelineWidth = std::max(200, viewWidth - marginLeft - marginRight);
+    const int totalHeight = marginTop + laneHeight * rowCount + 20;
+    historyScene->setSceneRect(0, 0, marginLeft + timelineWidth + marginRight, totalHeight);
+
+    // Draw lanes and labels
+    QPen guidePen(QColor("#e0e5ec"));
+    guidePen.setWidth(2);
+    for (int r = 0; r < rowCount; ++r) {
+        const int yCenter = marginTop + laneHeight * r + laneHeight / 2;
+        historyScene->addText(rowTitles[r], QFont("Helvetica", 11, QFont::Bold))
+            ->setPos(0, yCenter - 12);
+        historyScene->addLine(marginLeft, yCenter, marginLeft + timelineWidth, yCenter, guidePen);
+    }
+
+    // Time axis ticks/labels (seconds)
+    QPen axisPen(QColor("#c0c5cd"));
+    axisPen.setWidth(2);
+    const int yAxis = marginTop + laneHeight * rowCount + 5;
+    historyScene->addLine(marginLeft, yAxis, marginLeft + timelineWidth, yAxis, axisPen);
+    auto tickText = [&](int64_t ms, const QString& label) {
+        const double tRatio = static_cast<double>(ms - startMs) / duration;
+        const double x = marginLeft + timelineWidth * tRatio;
+        historyScene->addLine(x, yAxis - 6, x, yAxis + 6, axisPen);
+        auto* txt = historyScene->addText(label, QFont("Helvetica", 9, QFont::Bold));
+        txt->setDefaultTextColor(QColor("#0a4f91"));
+        txt->setPos(x - 10, yAxis + 8);
+    };
+    tickText(startMs, "0s");
+    tickText(endMs, QString("+%1s").arg(static_cast<int>((endMs - startMs) / 1000)));
+
+    // Place icons
+    for (const auto& ev : events) {
+        const double tRatio = static_cast<double>(ev.timestampMs - startMs) / duration;
+        const double x = marginLeft + timelineWidth * tRatio;
+        int laneIdx = -1;
+        for (int r = 0; r < rowCount; ++r) {
+            if (static_cast<uint8_t>(rowTypes[r]) == ev.scoreType) {
+                laneIdx = r;
+                break;
+            }
+        }
+        if (laneIdx < 0) continue;
+        const int yCenter = marginTop + laneHeight * laneIdx + laneHeight / 2;
+        const QPixmap* pix = violationPixmap(ev.scoreType);
+        if (!pix) continue;
+        QPixmap scaled = pix->scaled(iconSize, iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        auto* item = historyScene->addPixmap(scaled);
+        item->setPos(x - scaled.width() / 2, yCenter - scaled.height() / 2);
+
+        auto* txt = historyScene->addText(QString("+%1s").arg(static_cast<int>((ev.timestampMs - startMs) / 1000)),
+                                          QFont("Helvetica", 8, QFont::Bold));
+        txt->setDefaultTextColor(QColor("#444444"));
+        txt->setPos(x - 12, yCenter - iconSize / 2 - 14);
+    }
+}
+
 void InfotainmentWidget::toggleDisplayType() {
     auto frame = baseData.getFrameDataCopy();
     uint8_t nextDisplay;
     if (frame.curDisplayType == static_cast<uint8_t>(RenderingData::DisplayType::Dashboard)) {
         nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::ScoreBoard);
     } else if (frame.curDisplayType == static_cast<uint8_t>(RenderingData::DisplayType::ScoreBoard)) {
+        nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::History);
+    } else if (frame.curDisplayType == static_cast<uint8_t>(RenderingData::DisplayType::History)) {
         nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::Emotion); // reuse for detail page
     } else {
         nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::Dashboard);

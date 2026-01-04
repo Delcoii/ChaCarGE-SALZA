@@ -19,6 +19,7 @@ typedef struct {
 // shared memory for Data for main apu
 typedef struct {
     DrivingScore driving_score;
+    uint8_t bUseDrivingScoreChecking;
 } ShmGeneratedInfo;
 
 // Integrated shared memory structure

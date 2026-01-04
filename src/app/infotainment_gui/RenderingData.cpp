@@ -32,6 +32,8 @@ void RenderingData::composeFrame(RenderPayload& payload) {
     payload.rawWarningSignal = frame.warningSignal;
     payload.rawEmotionSignal = frame.emotion;
     payload.scoreDirection = frame.scoreDirection;
+    payload.useDrivingScoreCheckActive = frame.useDrivingScoreCheck;
+    payload.violations = frame.violations;
 
     payload.signType = toSignType(frame.rawData.signSignal);
     payload.warningType = toWarningType(frame.warningSignal);
@@ -69,6 +71,10 @@ void RenderingData::composeFrame(RenderPayload& payload) {
         break;
     case DisplayType::ScoreBoard:
         payload.tierImage = imageData.getTierImage(payload.tierType);
+        break;
+    case DisplayType::History:
+        // History view uses payload.violations and images fetched in the widget
+        payload.tierImage = nullptr;
         break;
     case DisplayType::COUNT:
         // never hit; handled by toDisplayType

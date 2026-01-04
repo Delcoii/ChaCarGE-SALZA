@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <cstring>
 
 extern "C" ShmIntegrated* init_shared_memory(void)
 {
@@ -29,6 +30,8 @@ extern "C" ShmIntegrated* init_shared_memory(void)
         close(shm_fd);
         return NULL;
     }
+    // Ensure clean initialization so new fields (e.g., bUseDrivingScoreChecking) start at 0
+    memset(p_shm, 0, SHM_SIZE);
 
     close(shm_fd);
     return p_shm;
