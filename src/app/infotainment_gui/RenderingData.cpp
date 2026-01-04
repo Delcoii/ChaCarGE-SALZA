@@ -1,5 +1,6 @@
 #include "RenderingData.h"
 #include <algorithm>
+#include "ShmCompat.h"
 
 namespace {
 template <typename EnumType>
@@ -56,14 +57,14 @@ void RenderingData::composeFrame(RenderPayload& payload) {
         payload.signImage = imageData.getSignImage(payload.signType);
         break;
     case DisplayType::Warning:
-        payload.warningIcon = imageData.getWarningIcon(payload.warningType);
+        payload.warningIcon = imageData.getSignImage(toWarningSign(frame.warningSignal));
         break;
     case DisplayType::Emotion:
         payload.emotionGif = imageData.getEmotionGif(payload.emotionType);
         break;
     case DisplayType::Dashboard:
         payload.signImage = imageData.getSignImage(payload.signType);
-        payload.warningIcon = imageData.getWarningIcon(payload.warningType);
+        payload.warningIcon = imageData.getSignImage(toWarningSign(frame.warningSignal));
         payload.emotionGif = imageData.getEmotionGif(payload.emotionType);
         break;
     case DisplayType::ScoreBoard:
@@ -103,6 +104,18 @@ ImageData::SignType RenderingData::toSignType(uint8_t raw) {
 
 ImageData::WarningIconType RenderingData::toWarningType(uint8_t raw) {
     return clampEnum(raw, ImageData::WarningIconType::NONE, ImageData::WarningIconType::MAX_ICON_TYPES);
+}
+
+ImageData::SignType RenderingData::toWarningSign(uint8_t raw) {
+    switch (static_cast<ScoreType>(raw)) {
+    case SCORE_BUMP: return ImageData::SignType::BUMP;
+    case SCORE_OVER_SPEED: return ImageData::SignType::OVERSPEED;
+    case SCORE_SUDDEN_CURVE: return ImageData::SignType::OVERTURN;
+    case SCORE_IGNORE_SIGN: return ImageData::SignType::SIGNAL_VIOLATION;
+    case SCORE_SUDDEN_ACCEL: return ImageData::SignType::OVERSPEED;
+    case SCORE_V2V_DISTANCE: return ImageData::SignType::BUMP;
+    default: return ImageData::SignType::NONE;
+    }
 }
 
 ImageData::EmotionGifType RenderingData::toEmotionType(uint8_t raw) {

@@ -7,7 +7,7 @@
 #include <chrono>
 #include <thread>
 #include <cmath>
-#include <limits>
+#include <iostream>
 
 AppController::AppController(BaseData& base, RenderingData& rendering, InfotainmentWidget& uiWidget)
     : baseData(base), renderingData(rendering), ui(uiWidget) {}
@@ -64,6 +64,9 @@ void AppController::loadAssets(ImageData& imageData, const QString& assetBasePat
 
 void AppController::producerLoop() {
     // Read from shared memory and update BaseData
+    DrivingScore prevDrivingScore{};
+    bool hasPrevDrivingScore = false;
+
     while (running) {
         if (!shmPtr) {
             shmPtr = init_shared_memory();
@@ -74,20 +77,58 @@ void AppController::producerLoop() {
         }
 
         // Traffic sign + vehicle command raw inputs
+        const ShmGivenInfo& given = shmPtr->given_info;
         BaseData::RawData rawData{};
-        rawData.signSignal = static_cast<uint8_t>(shmPtr->given_info.traffic_state.sign_state);
-        rawData.throttle = shmPtr->given_info.vehicle_command.throttle;
-        rawData.brake = shmPtr->given_info.vehicle_command.brake;
-        rawData.steerTireDegree = shmPtr->given_info.vehicle_command.steer_tire_degree;
+        rawData.signSignal = static_cast<uint8_t>(given.traffic_state.sign_state);
+        rawData.throttle = given.vehicle_command.throttle;
+        rawData.brake = given.vehicle_command.brake;
+        rawData.steerTireDegree = given.vehicle_command.steer_tire_degree;
 
         // Driving score
-        const DrivingScore& ds = shmPtr->generated_info.driving_score;
-        uint8_t warningSignal = ds.score_type;
-        double delta = ds.total_score;
-        uint8_t scoreDirection = ds.score_direction;
+        const ShmGeneratedInfo& generated = shmPtr->generated_info;
+        const DrivingScore& ds = generated.driving_score;
+        const bool scoreTypeValid = ds.score_type <= static_cast<uint8_t>(SCORE_V2V_DISTANCE);
+        const bool directionValid = ds.score_direction <= static_cast<uint8_t>(SCORE_MINUS);
+        const bool scoreFinite = std::isfinite(ds.total_score);
+        const bool hasDelta = scoreFinite && fabs(ds.total_score) > TOLERANCE_DOUBLE;
+        const bool drivingScorePresent = scoreTypeValid && directionValid && hasDelta;
+        uint8_t warningSignal = drivingScorePresent ? ds.score_type : 0xFF;
+        double delta = drivingScorePresent ? ds.total_score : 0.0;
+        uint8_t scoreDirection = drivingScorePresent ? ds.score_direction : static_cast<uint8_t>(SCORE_NORMAL);
+
+        if (drivingScorePresent) {
+            const bool drivingScoreChanged =
+                !hasPrevDrivingScore ||
+                (fabs(ds.total_score - prevDrivingScore.total_score) > TOLERANCE_DOUBLE ||
+                 ds.score_type != prevDrivingScore.score_type ||
+                 ds.score_direction != prevDrivingScore.score_direction);
+            if (drivingScoreChanged) {
+                if (hasPrevDrivingScore) {
+                    std::cout << "[producerLoop] generated_info changed: "
+                              << "total_score " << prevDrivingScore.total_score << " -> " << ds.total_score
+                              << ", score_type " << static_cast<int>(prevDrivingScore.score_type)
+                              << " -> " << static_cast<int>(ds.score_type)
+                              << ", score_direction " << static_cast<int>(prevDrivingScore.score_direction)
+                              << " -> " << static_cast<int>(ds.score_direction)
+                              << std::endl;
+                } else {
+                    std::cout << "[producerLoop] generated_info initial: "
+                              << "total_score=" << ds.total_score
+                              << " score_type=" << static_cast<int>(ds.score_type)
+                              << " score_direction=" << static_cast<int>(ds.score_direction)
+                              << std::endl;
+                }
+            }
+            prevDrivingScore = ds;
+            hasPrevDrivingScore = true;
+        } else {
+            hasPrevDrivingScore = false;
+        }
 
         // Map score_type -> UserData::ScoreType
-        if (fabs(delta) > TOLERANCE_DOUBLE && warningSignal < static_cast<uint8_t>(UserData::ScoreType::MAX_SCORE_TYPES)) {
+        if (drivingScorePresent &&
+            fabs(delta) > TOLERANCE_DOUBLE &&
+            warningSignal < static_cast<uint8_t>(UserData::ScoreType::MAX_SCORE_TYPES)) {
             auto& ud = UserData::getInstance();
             auto st = static_cast<UserData::ScoreType>(warningSignal);
             ud.adjustCurScore(st, delta);
@@ -96,7 +137,7 @@ void AppController::producerLoop() {
         
         // Jaeyeon : 잘했다, 못했다는 type은 필요해서 세원님이 이 타입은 보내줘야함. 
         uint8_t emotionEncoded =
-            (delta < 0) ? static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE)
+            (delta < TOLERANCE_DOUBLE) ? static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE)
                         : static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
 
         baseData.setFrameSignals(rawData, warningSignal, emotionEncoded, scoreDirection, baseData.getCurDisplayType());
@@ -112,8 +153,7 @@ void AppController::producerLoop() {
             }
         }
         
-        if (baseData.getCurDisplayType() == 4) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 

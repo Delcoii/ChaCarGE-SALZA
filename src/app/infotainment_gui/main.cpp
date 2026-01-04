@@ -1,4 +1,3 @@
-#include "main.h"
 #include "UserData.h"
 #include "ImageData.h"
 #include "BaseData.h"
@@ -7,9 +6,9 @@
 #include "AppController.h"
 #include "Common.h"
 
+#include <iostream>
 #include <QApplication>
 #include <QDir>
-#include <QTimer>
 #include <QObject>
 #include <thread>
 #include <chrono>

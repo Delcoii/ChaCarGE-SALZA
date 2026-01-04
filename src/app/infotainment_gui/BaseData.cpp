@@ -3,12 +3,12 @@
 BaseData::BaseData()
     : curFrameData{
         {0.0, 0.0, 0.0, 0}, // rawData
-        0, // warningSignal
+        0xFF, // warningSignal (invalid sentinel so no warning shows initially)
         0, // emotion
         0, // scoreDirection
         UserData::getInstance(), // userData reference
         ImageData::getInstance(), // imageData reference
-        0  // curDisplayType
+        4  // curDisplayType (default to dashboard view)
     }
 {
 }
@@ -35,4 +35,9 @@ void BaseData::setFrameSignals(const RawData& rawData, uint8_t warningSignal, ui
 uint8_t BaseData::getCurDisplayType() const {
     std::lock_guard<std::mutex> lock(mtx);
     return curFrameData.curDisplayType;
+}
+
+void BaseData::setDisplayType(uint8_t displayType) {
+    std::lock_guard<std::mutex> lock(mtx);
+    curFrameData.curDisplayType = displayType;
 }
