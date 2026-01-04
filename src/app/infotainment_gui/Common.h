@@ -6,4 +6,6 @@ enum class WindowSize {
     HEIGHT = 600,
 };
 
+constexpr double TOLERANCE_DOUBLE = (1.0e-8);
+
 #endif // COMMON_H

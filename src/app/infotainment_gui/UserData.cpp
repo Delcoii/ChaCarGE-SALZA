@@ -4,6 +4,7 @@
 #include <array>
 #include <limits>
 #include <iostream>
+#include <cmath>
 #include <nlohmann/json.hpp>
 
 UserData::UserData() : userTotalScore(0) {
@@ -21,8 +22,9 @@ uint16_t UserData::getUserTotalScore() {
     return userTotalScore;
 }
 
-void UserData::adjustUserTotalScore(int delta) {
-    int newVal = static_cast<int>(userTotalScore) + delta;
+void UserData::adjustUserTotalScore(double delta) {
+    const auto deltaInt = static_cast<int>(std::llround(delta));
+    int newVal = static_cast<int>(userTotalScore) + deltaInt;
     if (newVal < 0) newVal = 0;
     if (newVal > std::numeric_limits<uint16_t>::max()) newVal = std::numeric_limits<uint16_t>::max();
     userTotalScore = static_cast<uint16_t>(newVal);
@@ -36,9 +38,10 @@ const std::string& UserData::getUsername() const {
     return username;
 }
 
-uint8_t UserData::adjustCurScore(ScoreType type, int delta) {
+uint8_t UserData::adjustCurScore(ScoreType type, double delta) {
     const auto idx = static_cast<uint8_t>(type);
-    int newVal = static_cast<int>(curScores[idx]) + delta;
+    const auto deltaInt = static_cast<int>(std::llround(delta));
+    int newVal = static_cast<int>(curScores[idx]) + deltaInt;
     if (newVal < 0) newVal = 0;
     if (newVal > std::numeric_limits<uint8_t>::max()) newVal = std::numeric_limits<uint8_t>::max();
     curScores[idx] = static_cast<uint8_t>(newVal);

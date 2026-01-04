@@ -54,6 +54,7 @@ public:
         uint8_t rawSignSignal = 0;
         uint8_t rawWarningSignal = 0;
         uint8_t rawEmotionSignal = 0;
+        uint8_t scoreDirection = 0;
     };
 
     static RenderingData& getInstance();
@@ -71,6 +72,7 @@ private:
     static DisplayType toDisplayType(uint8_t raw);
     static ImageData::SignType toSignType(uint8_t raw);
     static ImageData::WarningIconType toWarningType(uint8_t raw);
+    static ImageData::SignType toWarningSign(uint8_t raw);
     static ImageData::EmotionGifType toEmotionType(uint8_t raw);
     static ImageData::TierType toTierType(uint16_t score);
 
