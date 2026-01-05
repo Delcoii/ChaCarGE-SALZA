@@ -8,11 +8,12 @@
 #define STRUCT_DRIVING_SCORE_H
 enum ScoreType {
     SCORE_BUMP = 0,
-    SCORE_OVER_SPEED,
     SCORE_SUDDEN_ACCEL,
     SCORE_SUDDEN_CURVE,
     SCORE_IGNORE_SIGN,
     SCORE_V2V_DISTANCE,
+    SCORE_OVER_SPEED,
+    SCORE_TYPE_NONE
 };
 
 enum ScoreDirection { 
@@ -20,12 +21,6 @@ enum ScoreDirection {
     SCORE_PLUS = 1, 
     SCORE_MINUS = 2,
 };
-
-typedef struct{
-    double total_score;
-    uint8_t score_type;
-    uint8_t score_direction;
-} DrivingScore;
 #endif
 
 #include "../../bsw/ipc/inc/shm_layout.h"
