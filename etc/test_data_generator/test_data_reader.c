@@ -18,6 +18,8 @@ ShmIntegrated* g_p_shm = NULL;
 int keep_running = 1;
 int count_turn = 0;
 int count_bump = 0;
+int count_accel = 0;
+int count_signal = 0;
 
 // Signal Handler (Ctrl+C)
 void signal_handler(int sig) {
@@ -49,13 +51,17 @@ const char* get_traffic_str(int status) {
 const char* get_score_type_str(int type) {
     switch (type) {
         case SCORE_BUMP:
-            count_bump++;
+            count_bump = g_p_shm->generated_info.driving_score_type.count;
             return "SPEED BUMP";
-        case SCORE_SUDDEN_ACCEL:  return "SUDDEN ACCEL/BRAKE 🚀";
+        case SCORE_SUDDEN_ACCEL:
+            count_accel = g_p_shm->generated_info.driving_score_type.count;
+            return "SUDDEN ACCEL/BRAKE 🚀";
         case SCORE_SUDDEN_CURVE:
-            count_turn++;
+            count_turn = g_p_shm->generated_info.driving_score_type.count;
             return "SUDDEN CURVE ⤵️";
-        case SCORE_IGNORE_SIGN:   return "SIGNAL VIOLATION 🚨";
+        case SCORE_IGNORE_SIGN:
+            count_signal = g_p_shm->generated_info.driving_score_type.count;
+            return "SIGNAL VIOLATION 🚨";
         case SCORE_TYPE_NONE:     return "Safe Driving ✅";
         default:                  return "Unknown";
     }
@@ -107,19 +113,24 @@ int main() {
         printf(" ---------------------------------------------------\n");
         
         // Event Detection Display
-        int current_type = g_p_shm->generated_info.driving_score.score_type;
+        int current_type = g_p_shm->generated_info.driving_score_type.score_type;
         printf("  Detected Event : ");
         if (current_type != SCORE_TYPE_NONE) {
              printf("\033[1;31m%s\033[0m\n", get_score_type_str(current_type)); // Red
         } else {
              printf("%s\n", get_score_type_str(current_type));
         }
-        printf("  Event Count    : %d \n", g_p_shm->generated_info.driving_score.count);
+        printf("  Event Count    : %d \n", g_p_shm->generated_info.driving_score_type.count);
 
         // Score Display
         printf("  Safety Score   : \033[1;36m%.2f / 100.0\033[0m \n", 
-               g_p_shm->generated_info.driving_score.total_score); // Cyan
+               g_p_shm->generated_info.total_score); // Cyan
         
+        printf("===================================================\n");
+        printf("  Bump Events Detected: %d \n", count_bump);
+        printf("  Sudden Curve Events Detected: %d \n", count_turn);
+        printf("  Sudden Accel Events Detected: %d \n", count_accel);
+        printf("  Signal Violation Events Detected: %d \n", count_signal);
         printf("===================================================\n");
         printf(" UI Refresh Rate: 10Hz (Precision Mode) \n");
 

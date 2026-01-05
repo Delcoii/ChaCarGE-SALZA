@@ -8,6 +8,7 @@
 void init_algo_state(AlgoState* state) {
     memset(state, 0, sizeof(AlgoState));
     state->is_first_loop = 1;
+    state->prev_score_type = SCORE_TYPE_NONE;
 
     // MA Buffer Init
     state->acc_z_idx = 0;
@@ -132,18 +133,12 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     
     int event_detected = 0;
 
-    state->sudden_accel_count = 0;
-    state->sudden_curve_count = 0;
-    state->bump_count = 0;
-    state->signal_violation_count = 0;
-
     output->driving_score_type.score_type = SCORE_TYPE_NONE; // Reset first
     output->driving_score_type.count = 0;
 
     // (A) Signal Violation (Highest Priority)
     if (state->prev_traffic_state == TRAFFIC_STATE_RED && traffic == TRAFFIC_STATE_NONE && state->prev_throttle > 0.0) {
         curr_seg->signal_violation_ticks++;
-        output->driving_score_type.count = ++state->signal_violation_count;
         output->driving_score_type.score_type = SCORE_IGNORE_SIGN;
         event_detected = 1;
     }
@@ -159,14 +154,12 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
             if(!state->is_continuous_event_active) {
                 if(is_turning) {
                     curr_seg->aggressive_turn_ticks++;
-                    output->driving_score_type.count = ++state->sudden_curve_count;
                     output->driving_score_type.score_type = SCORE_SUDDEN_CURVE;
                 }
         
             // (C) Sudden Accel (Mapped to Sudden Accel Type)    
                 else {
                     curr_seg->sudden_accel_ticks++;
-                    output->driving_score_type.count = ++state->sudden_accel_count;
                     output->driving_score_type.score_type = SCORE_SUDDEN_ACCEL; 
                 }
             }
@@ -180,18 +173,40 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
             if(state->bump_cooldown_ticks == 0 && fabs(state->bias_acc_z - filtered_acc_z) > THRESH_BUMP_MPS2) {
                 curr_seg->bump_ticks++;
                 output->driving_score_type.score_type = SCORE_BUMP;
-                output->driving_score_type.count = ++state->bump_count;
                 
                 state->bump_cooldown_ticks = BUMP_COOLDOWN_TICKS; // Set cooldown
             }
 
            // All checks done for continuous events
         }
-    
-
-        
-    
     }
+
+    // --- New Event Counting Logic based on score_type change (compact version) ---
+    uint16_t current_score_type = output->driving_score_type.score_type;
+    int is_new_event = ((current_score_type != state->prev_score_type) && (current_score_type != SCORE_TYPE_NONE));
+    if(is_new_event) {
+        switch (current_score_type) {
+            case SCORE_SUDDEN_CURVE:
+                output->driving_score_type.count = ++state->sudden_curve_count;
+                break;
+            case SCORE_SUDDEN_ACCEL:
+                output->driving_score_type.count = ++state->sudden_accel_count;
+                break;
+            case SCORE_IGNORE_SIGN:
+                output->driving_score_type.count = ++state->signal_violation_count;
+                break;
+            case SCORE_BUMP:
+                output->driving_score_type.count = ++state->bump_count;
+                break;
+        }
+    }
+    else {
+        output->driving_score_type.count = 0;
+    }
+
+    // Update the previous score type for the next tick
+    state->prev_score_type = current_score_type;
+    
     // Update state for next loop
     state->prev_traffic_state = traffic;
     state->prev_throttle = throttle;

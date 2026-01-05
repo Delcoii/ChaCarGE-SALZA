@@ -47,6 +47,7 @@ typedef struct {
 
     // Traffic Logic
     uint8_t prev_traffic_state;
+    uint16_t prev_score_type;
 
     // State Variables for avoiding repeated event detection
     uint8_t is_continuous_event_active;     // flag for sudden curve/accel

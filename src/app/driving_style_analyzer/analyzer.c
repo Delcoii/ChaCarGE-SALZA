@@ -36,7 +36,7 @@ int main() {
     
     printf("[Main] Safety Score System Started (High Precision Mode: 10ms/100Hz)\n");
     printf("[Main] Press Ctrl+C to stop safely.\n");
-
+    
     // 2. Initialize Shared Memory
     g_p_shm = init_shared_memory();
     if (g_p_shm == NULL) {
@@ -44,10 +44,19 @@ int main() {
         return 1;
     }
 
+    
+    //g_p_shm->given_info.bUseDrivingScoreChecking = 1; // Enable by default
+    
     // 3. Initialize Algorithm State
     AlgoState algo_state;
     init_algo_state(&algo_state);
-
+    
+    // Initialize event counts in the algorithm state
+    algo_state.sudden_accel_count = 0;
+    algo_state.sudden_curve_count = 0;
+    algo_state.bump_count = 0;
+    algo_state.signal_violation_count = 0;
+    
     // 4. Variable for state update
     uint8_t prev_control_flag = 0;
 
@@ -83,7 +92,7 @@ int main() {
 
         // Update current control flag state
         prev_control_flag = curr_control_flag;
-        
+
         /* ------------------------------------------------------- */
         /* Step B: Calculate Next Wake-up Time                     */
         /* Add exactly 10ms to the target time.                    */
