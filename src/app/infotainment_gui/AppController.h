@@ -43,7 +43,7 @@ private:
     ShmIntegrated* shmPtr = nullptr;
     bool lastUseDrivingCheck = false;
     std::vector<BaseData::ViolationEvent> activeViolations;
-    std::array<uint16_t, static_cast<size_t>(SCORE_TYPE_NONE) + 1> lastScoreCounts{};
+    std::array<uint16_t, static_cast<size_t>(ScoreType::SCORE_TYPE_NONE) + 1> lastScoreCounts{};
 
     static constexpr int kRenderBufferCount = 3;
     std::array<RenderingData::RenderPayload, kRenderBufferCount> renderBuffers{};

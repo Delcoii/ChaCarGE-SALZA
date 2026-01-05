@@ -114,12 +114,12 @@ ImageData::WarningIconType RenderingData::toWarningType(uint8_t raw) {
 
 ImageData::SignType RenderingData::toWarningSign(uint8_t raw) {
     switch (static_cast<ScoreType>(raw)) {
-    case SCORE_BUMP: return ImageData::SignType::BUMP;
-    case SCORE_OVER_SPEED: return ImageData::SignType::OVERSPEED;
-    case SCORE_SUDDEN_CURVE: return ImageData::SignType::OVERTURN;
-    case SCORE_IGNORE_SIGN: return ImageData::SignType::SIGNAL_VIOLATION;
-    case SCORE_SUDDEN_ACCEL: return ImageData::SignType::OVERSPEED;
-    case SCORE_V2V_DISTANCE: return ImageData::SignType::BUMP;
+    case ScoreType::SCORE_BUMP: return ImageData::SignType::BUMP;
+    case ScoreType::SCORE_OVER_SPEED: return ImageData::SignType::OVERSPEED;
+    case ScoreType::SCORE_SUDDEN_CURVE: return ImageData::SignType::OVERTURN;
+    case ScoreType::SCORE_IGNORE_SIGN: return ImageData::SignType::SIGNAL_VIOLATION;
+    case ScoreType::SCORE_SUDDEN_ACCEL: return ImageData::SignType::OVERSPEED;
+    case ScoreType::SCORE_V2V_DISTANCE: return ImageData::SignType::BUMP;
     default: return ImageData::SignType::NONE;
     }
 }
