@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <array>
+#include <algorithm>
 #include <limits>
 #include <iostream>
 #include <cmath>
@@ -22,6 +23,10 @@ uint16_t UserData::getUserTotalScore() {
     return userTotalScore;
 }
 
+void UserData::setUserTotalScore(uint16_t value) {
+    userTotalScore = value;
+}
+
 void UserData::adjustUserTotalScore(double delta) {
     const auto deltaInt = static_cast<int>(std::llround(delta));
     int newVal = static_cast<int>(userTotalScore) + deltaInt;
@@ -32,6 +37,18 @@ void UserData::adjustUserTotalScore(double delta) {
 
 uint8_t UserData::getCurScore(ScoreType type) {
     return curScores[static_cast<uint8_t>(type)];
+}
+
+void UserData::setCurScore(ScoreType type, uint16_t value) {
+    const auto idx = static_cast<uint8_t>(type);
+    const uint16_t clamped = static_cast<uint16_t>(std::min<uint16_t>(value, std::numeric_limits<uint8_t>::max()));
+    curScores[idx] = static_cast<uint8_t>(clamped);
+}
+
+void UserData::resetCurScores() {
+    for (auto& score : curScores) {
+        score = 0;
+    }
 }
 
 const std::string& UserData::getUsername() const {
