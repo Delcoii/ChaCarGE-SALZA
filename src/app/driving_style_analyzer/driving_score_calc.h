@@ -27,6 +27,12 @@ typedef struct {
     uint8_t current_seg_idx; // Current segment index (0 ~ 5)
     uint8_t is_first_loop;   // Flag for the first loop execution
 
+    // Event Counts
+    uint16_t sudden_accel_count;
+    uint16_t sudden_curve_count;
+    uint16_t bump_count;
+    uint16_t signal_violation_count;
+
     // Moving Average for AccZ
     double acc_z_buffer[MAX_WINDOW_SIZE];    // buffer for AccZ values
     uint32_t acc_z_idx;                     // current index in the buffer

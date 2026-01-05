@@ -131,12 +131,20 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     // We check in reverse order of priority or use else-if carefully.
     
     int event_detected = 0;
-    output->driving_score.score_type = SCORE_TYPE_NONE; // Reset first
+
+    state->sudden_accel_count = 0;
+    state->sudden_curve_count = 0;
+    state->bump_count = 0;
+    state->signal_violation_count = 0;
+
+    output->driving_score_type.score_type = SCORE_TYPE_NONE; // Reset first
+    output->driving_score_type.count = 0;
 
     // (A) Signal Violation (Highest Priority)
     if (state->prev_traffic_state == TRAFFIC_STATE_RED && traffic == TRAFFIC_STATE_NONE && state->prev_throttle > 0.0) {
         curr_seg->signal_violation_ticks++;
-        output->driving_score.score_type = SCORE_IGNORE_SIGN;
+        output->driving_score_type.count = ++state->signal_violation_count;
+        output->driving_score_type.score_type = SCORE_IGNORE_SIGN;
         event_detected = 1;
     }
 
@@ -149,14 +157,18 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
         // (B) Sudden Curve (If no higher priority event)
         if(is_turning || is_accel/* || is_brake*/) {
             if(!state->is_continuous_event_active) {
-                curr_seg->aggressive_turn_ticks++;
-                output->driving_score.score_type = SCORE_SUDDEN_CURVE;
-            }
+                if(is_turning) {
+                    curr_seg->aggressive_turn_ticks++;
+                    output->driving_score_type.count = ++state->sudden_curve_count;
+                    output->driving_score_type.score_type = SCORE_SUDDEN_CURVE;
+                }
         
             // (C) Sudden Accel (Mapped to Sudden Accel Type)    
-            else {
-                curr_seg->sudden_accel_ticks++;
-                output->driving_score.score_type = SCORE_SUDDEN_ACCEL; 
+                else {
+                    curr_seg->sudden_accel_ticks++;
+                    output->driving_score_type.count = ++state->sudden_accel_count;
+                    output->driving_score_type.score_type = SCORE_SUDDEN_ACCEL; 
+                }
             }
             state->is_continuous_event_active = 1; // Set flag
         }
@@ -167,7 +179,8 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
 
             if(state->bump_cooldown_ticks == 0 && fabs(state->bias_acc_z - filtered_acc_z) > THRESH_BUMP_MPS2) {
                 curr_seg->bump_ticks++;
-                output->driving_score.score_type = SCORE_BUMP;
+                output->driving_score_type.score_type = SCORE_BUMP;
+                output->driving_score_type.count = ++state->bump_count;
                 
                 state->bump_cooldown_ticks = BUMP_COOLDOWN_TICKS; // Set cooldown
             }
@@ -187,7 +200,8 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     curr_seg->score = calculate_tesla_score(curr_seg);
 
     // 6. Check Segment Completion (TMAP Logic)
-    if (curr_seg->distance_accumulated_km >= SEGMENT_DISTANCE_KM) {
+    // if (curr_seg->distance_accumulated_km >= SEGMENT_DISTANCE_KM) {
+    if (curr_seg->total_ticks >= SEGMENT_TIMEOUT_TICKS) {
         curr_seg->is_valid = 1;
         // printf("[Algo] Segment %d Finished. Score: %.2f\n", state->current_seg_idx, curr_seg->score);
 
@@ -216,5 +230,5 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
         }
     }
 
-    output->driving_score.total_score = (valid_count > 0) ? (total_sum / valid_count) : 100.0;
+    output->total_score = (valid_count > 0) ? (total_sum / valid_count) : 100.0;
 }

@@ -114,14 +114,12 @@ int main() {
         } else {
              printf("%s\n", get_score_type_str(current_type));
         }
+        printf("  Event Count    : %d \n", g_p_shm->generated_info.driving_score.count);
 
         // Score Display
         printf("  Safety Score   : \033[1;36m%.2f / 100.0\033[0m \n", 
                g_p_shm->generated_info.driving_score.total_score); // Cyan
         
-        printf("\n===================================================\n");
-        printf(" Total Sudden Turns Detected: %d \n", count_turn);
-        printf(" Total Speed Bumps Detected : %d \n", count_bump);
         printf("===================================================\n");
         printf(" UI Refresh Rate: 10Hz (Precision Mode) \n");
 
