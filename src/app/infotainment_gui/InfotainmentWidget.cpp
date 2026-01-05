@@ -42,11 +42,11 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     auto* nameSignalBox = new QVBoxLayout();
     nameSignalBox->setSpacing(6);
     nameSignalBox->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
-    headerTitle = new QLabel("Mr.Tele", this);
-    headerTitle->setAlignment(Qt::AlignCenter);
-    headerTitle->setStyleSheet("font-size: 22px; font-weight: 800; color: #0a4f91;");
+    signalStateLabel = createImageLabel(32, 32);
+    signalStateLabel->setFixedSize(36, 36);
+    signalStateLabel->setStyleSheet("background: transparent;");
     signalLabel = createImageLabel(1, 1);
-    nameSignalBox->addWidget(headerTitle, 0, Qt::AlignCenter);
+    nameSignalBox->addWidget(signalStateLabel, 0, Qt::AlignCenter);
     nameSignalBox->addWidget(signalLabel, 0, Qt::AlignCenter);
     header->addLayout(nameSignalBox, 0);
 
@@ -284,8 +284,14 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
 InfotainmentWidget::~InfotainmentWidget() = default;
 
 void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) {
-    // Update username from UserData (via payload.userTotalScore owner)
-    headerTitle->setText("Mr.Tele");
+    if (signalStateLabel) {
+        const QPixmap* signPix = imageData.getSignImage(payload.signType);
+        if (!signPix) {
+            signPix = imageData.getSignImage(ImageData::SignType::NONE);
+        }
+        const int headerSize = std::max(24, signalStateLabel->height());
+        setPixmapToLabel(signalStateLabel, signPix, headerSize, headerSize, "");
+    }
     if (onOffLabel) {
         const bool on = payload.useDrivingScoreCheckActive;
         onOffLabel->setText(on ? "ON" : "OFF");
@@ -388,8 +394,9 @@ QPixmap makeSegmentPixmap(const QColor& fill, const QColor& border) {
 
 void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload) {
     const int sigSide = std::max(120, static_cast<int>(height() * 0.15));
-    const bool hasTraffic = (payload.rawSignSignal != 0) && payload.signImage;
-    setPixmapToLabel(signalLabel, hasTraffic ? payload.signImage : nullptr, sigSide, sigSide, "");
+    const QPixmap* trafficPix = payload.signImage ? payload.signImage
+                                                  : imageData.getSignImage(ImageData::SignType::NONE);
+    setPixmapToLabel(signalLabel, trafficPix, sigSide, sigSide, "");
 
     const double fx = width() / 800.0;
     const double fy = height() / 600.0;

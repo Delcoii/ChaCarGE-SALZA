@@ -25,7 +25,7 @@ public:
         double throttle;
         double brake;
         double steerTireDegree;
-        uint8_t signSignal;   // Traffic sign signal
+        uint8_t signSignal;   // Traffic sign signal // 0:NONE, 1:RED, 2:YELLOW, 3:GREEN
     };
 
     struct FrameData {
