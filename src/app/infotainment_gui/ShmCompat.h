@@ -3,10 +3,8 @@
 
 #include <stdint.h>
 
-// Override broken BSW header guard and supply the needed types locally.
-#ifndef STRUCT_DRIVING_SCORE_H
-#define STRUCT_DRIVING_SCORE_H
-enum ScoreType {
+// Provide scoped ScoreType to avoid clashes with the unscoped BSW constants.
+enum class ScoreType : uint16_t {
     SCORE_BUMP = 0,
     SCORE_SUDDEN_ACCEL,
     SCORE_SUDDEN_CURVE,
@@ -16,12 +14,11 @@ enum ScoreType {
     SCORE_TYPE_NONE
 };
 
-enum ScoreDirection { 
+enum ScoreDirection {
     SCORE_NORMAL = 0,
-    SCORE_PLUS = 1, 
+    SCORE_PLUS = 1,
     SCORE_MINUS = 2,
 };
-#endif
 
 #include "../../bsw/ipc/inc/shm_layout.h"
 

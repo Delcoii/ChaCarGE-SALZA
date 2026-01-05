@@ -75,10 +75,10 @@ void AppController::producerLoop() {
     // Read from shared memory and update BaseData
     auto mapToUserScoreType = [](ScoreType st, UserData::ScoreType& out) -> bool {
         switch (st) {
-        case SCORE_BUMP: out = UserData::ScoreType::SPEED_BUMPS; return true;
-        case SCORE_SUDDEN_ACCEL: out = UserData::ScoreType::RAPID_ACCELERATIONS; return true;
-        case SCORE_SUDDEN_CURVE: out = UserData::ScoreType::SHARP_TURNS; return true;
-        case SCORE_IGNORE_SIGN: out = UserData::ScoreType::SIGNAL_VIOLATIONS; return true;
+        case ScoreType::SCORE_BUMP: out = UserData::ScoreType::SPEED_BUMPS; return true;
+        case ScoreType::SCORE_SUDDEN_ACCEL: out = UserData::ScoreType::RAPID_ACCELERATIONS; return true;
+        case ScoreType::SCORE_SUDDEN_CURVE: out = UserData::ScoreType::SHARP_TURNS; return true;
+        case ScoreType::SCORE_IGNORE_SIGN: out = UserData::ScoreType::SIGNAL_VIOLATIONS; return true;
         default: return false;
         }
     };
@@ -105,10 +105,10 @@ void AppController::producerLoop() {
         const bool useDrivingCheck = (given.bUseDrivingScoreChecking != 0);
         const uint16_t rawScoreType = generated.driving_score_type.score_type;
         const uint16_t rawScoreCount = generated.driving_score_type.count;
-        const bool scoreTypeValid = rawScoreType < static_cast<uint16_t>(SCORE_TYPE_NONE);
+        const bool scoreTypeValid = rawScoreType < static_cast<uint16_t>(ScoreType::SCORE_TYPE_NONE);
         uint8_t warningSignal = 0xFF;
         uint8_t emotionEncoded = static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
-        uint8_t scoreDirection = static_cast<uint8_t>(SCORE_NORMAL);
+        uint8_t scoreDirection = static_cast<uint8_t>(ScoreDirection::SCORE_NORMAL);
 
         const bool useCheckStarted = useDrivingCheck && !lastUseDrivingCheck;
         const bool useCheckStopped = !useDrivingCheck && lastUseDrivingCheck;
@@ -139,10 +139,10 @@ void AppController::producerLoop() {
             }
 
             const bool trackable =
-                scoreType == SCORE_BUMP ||
-                scoreType == SCORE_SUDDEN_ACCEL ||
-                scoreType == SCORE_SUDDEN_CURVE ||
-                scoreType == SCORE_IGNORE_SIGN;
+                scoreType == ScoreType::SCORE_BUMP ||
+                scoreType == ScoreType::SCORE_SUDDEN_ACCEL ||
+                scoreType == ScoreType::SCORE_SUDDEN_CURVE ||
+                scoreType == ScoreType::SCORE_IGNORE_SIGN;
 
             if (trackable && rawScoreCount > prevCount) {
                 const uint16_t deltaCount = rawScoreCount - prevCount;
@@ -157,7 +157,7 @@ void AppController::producerLoop() {
                 }
                 warningSignal = static_cast<uint8_t>(scoreType);
                 emotionEncoded = static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE);
-                scoreDirection = static_cast<uint8_t>(SCORE_MINUS);
+                scoreDirection = static_cast<uint8_t>(ScoreDirection::SCORE_MINUS);
             }
         }
 
