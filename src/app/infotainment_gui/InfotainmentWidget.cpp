@@ -181,7 +181,7 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     steeringCol->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
     steeringLabel = createImageLabel(140, 140);
     steeringLabel->setStyleSheet("background: transparent;");
-    steeringTextLabel = new QLabel("Steer", this);
+    steeringTextLabel = new QLabel("0.0", this);
     steeringTextLabel->setStyleSheet("font-size: 16px; font-weight: 700; color: #111111;");
     steeringTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
     steeringCol->addWidget(steeringLabel, 0, Qt::AlignHCenter | Qt::AlignBottom);
@@ -540,9 +540,11 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     if (steeringLabel) {
         steeringLabel->setFixedSize(steerWidth, gaugeHeight);
     }
+    if (steeringTextLabel) {
+        steeringTextLabel->setFixedWidth(steerWidth);
+    }
     if (throttleBar) throttleBar->setFixedSize(gaugeWidth, gaugeHeight);
     if (brakeBar) brakeBar->setFixedSize(gaugeWidth, gaugeHeight);
-    if (steeringTextLabel) steeringTextLabel->setText("Steer");
     if (throttleLabel) throttleLabel->setText("A");
     if (brakeLabel) brakeLabel->setText("B");
 
@@ -573,6 +575,12 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         } else {
             steeringLabel->setText("No wheel");
         }
+    }
+    if (steeringTextLabel) {
+        const double val = payload.steerAngleDeg;
+        const bool isZero = qFuzzyIsNull(val);
+        steeringTextLabel->setText(isZero ? QString::number(0.0, 'f', 1)
+                                          : QString::asprintf("%+.1f", val));
     }
 
     // update score gauge only (no numeric text)
