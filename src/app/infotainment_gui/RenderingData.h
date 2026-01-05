@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 #include "BaseData.h"
 
@@ -23,6 +24,7 @@ public:
         Emotion = 3,     // Driver emotion GIF
         Dashboard = 4,   // Scores plus needed icons
         ScoreBoard = 5,  // Total score/tier screen
+        History = 6,     // Timeline summary of violations
         COUNT
     };
 
@@ -54,11 +56,16 @@ public:
         uint8_t rawSignSignal = 0;
         uint8_t rawWarningSignal = 0;
         uint8_t rawEmotionSignal = 0;
+        uint8_t scoreDirection = 0;
+
+        bool useDrivingScoreCheckActive = false;
+        std::vector<BaseData::ViolationEvent> violations;
     };
 
     static RenderingData& getInstance();
 
     // Convert the current FrameData from BaseData into a RenderPayload
+    void composeFrame(RenderPayload& out);
     RenderPayload composeFrame();
 
 private:
@@ -70,6 +77,7 @@ private:
     static DisplayType toDisplayType(uint8_t raw);
     static ImageData::SignType toSignType(uint8_t raw);
     static ImageData::WarningIconType toWarningType(uint8_t raw);
+    static ImageData::SignType toWarningSign(uint8_t raw);
     static ImageData::EmotionGifType toEmotionType(uint8_t raw);
     static ImageData::TierType toTierType(uint16_t score);
 

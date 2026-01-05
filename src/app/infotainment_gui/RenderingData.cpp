@@ -1,5 +1,6 @@
 #include "RenderingData.h"
 #include <algorithm>
+#include "ShmCompat.h"
 
 namespace {
 template <typename EnumType>
@@ -17,10 +18,10 @@ RenderingData& RenderingData::getInstance() {
     return instance;
 }
 
-RenderingData::RenderPayload RenderingData::composeFrame() {
+void RenderingData::composeFrame(RenderPayload& payload) {
     const BaseData::FrameData frame = baseData.getFrameDataCopy();
 
-    RenderPayload payload{};
+    payload = RenderPayload{};
     payload.displayType = toDisplayType(frame.curDisplayType);
 
     payload.throttle = std::clamp(frame.rawData.throttle, 0.0, 100.0);
@@ -30,6 +31,9 @@ RenderingData::RenderPayload RenderingData::composeFrame() {
     payload.rawSignSignal = frame.rawData.signSignal;
     payload.rawWarningSignal = frame.warningSignal;
     payload.rawEmotionSignal = frame.emotion;
+    payload.scoreDirection = frame.scoreDirection;
+    payload.useDrivingScoreCheckActive = frame.useDrivingScoreCheck;
+    payload.violations = frame.violations;
 
     payload.signType = toSignType(frame.rawData.signSignal);
     payload.warningType = toWarningType(frame.warningSignal);
@@ -55,29 +59,37 @@ RenderingData::RenderPayload RenderingData::composeFrame() {
         payload.signImage = imageData.getSignImage(payload.signType);
         break;
     case DisplayType::Warning:
-        payload.warningIcon = imageData.getWarningIcon(payload.warningType);
+        payload.warningIcon = imageData.getSignImage(toWarningSign(frame.warningSignal));
         break;
     case DisplayType::Emotion:
         payload.emotionGif = imageData.getEmotionGif(payload.emotionType);
         break;
     case DisplayType::Dashboard:
         payload.signImage = imageData.getSignImage(payload.signType);
-        payload.warningIcon = imageData.getWarningIcon(payload.warningType);
+        payload.warningIcon = imageData.getSignImage(toWarningSign(frame.warningSignal));
         payload.emotionGif = imageData.getEmotionGif(payload.emotionType);
         break;
     case DisplayType::ScoreBoard:
         payload.tierImage = imageData.getTierImage(payload.tierType);
+        break;
+    case DisplayType::History:
+        // History view uses payload.violations and images fetched in the widget
+        payload.tierImage = nullptr;
         break;
     case DisplayType::COUNT:
         // never hit; handled by toDisplayType
         break;
     }
 
-    // Even for the default screen, fill signImage when a signal exists so the widget renders
-    if (!payload.signImage && payload.signType != ImageData::SignType::NONE) {
+    // Fill signImage for any sign type (including NONE) so the widget can render a default placeholder
+    if (!payload.signImage) {
         payload.signImage = imageData.getSignImage(payload.signType);
     }
+}
 
+RenderingData::RenderPayload RenderingData::composeFrame() {
+    RenderPayload payload{};
+    composeFrame(payload);
     return payload;
 }
 
@@ -98,6 +110,18 @@ ImageData::SignType RenderingData::toSignType(uint8_t raw) {
 
 ImageData::WarningIconType RenderingData::toWarningType(uint8_t raw) {
     return clampEnum(raw, ImageData::WarningIconType::NONE, ImageData::WarningIconType::MAX_ICON_TYPES);
+}
+
+ImageData::SignType RenderingData::toWarningSign(uint8_t raw) {
+    switch (static_cast<ScoreType>(raw)) {
+    case SCORE_BUMP: return ImageData::SignType::BUMP;
+    case SCORE_OVER_SPEED: return ImageData::SignType::OVERSPEED;
+    case SCORE_SUDDEN_CURVE: return ImageData::SignType::OVERTURN;
+    case SCORE_IGNORE_SIGN: return ImageData::SignType::SIGNAL_VIOLATION;
+    case SCORE_SUDDEN_ACCEL: return ImageData::SignType::OVERSPEED;
+    case SCORE_V2V_DISTANCE: return ImageData::SignType::BUMP;
+    default: return ImageData::SignType::NONE;
+    }
 }
 
 ImageData::EmotionGifType RenderingData::toEmotionType(uint8_t raw) {

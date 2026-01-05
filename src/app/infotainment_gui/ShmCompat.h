@@ -6,7 +6,7 @@
 // Override broken BSW header guard and supply the needed types locally.
 #ifndef STRUCT_DRIVING_SCORE_H
 #define STRUCT_DRIVING_SCORE_H
-enum {
+enum ScoreType {
     SCORE_BUMP = 0,
     SCORE_OVER_SPEED,
     SCORE_SUDDEN_ACCEL,
@@ -15,9 +15,16 @@ enum {
     SCORE_V2V_DISTANCE,
 };
 
+enum ScoreDirection { 
+    SCORE_NORMAL = 0,
+    SCORE_PLUS = 1, 
+    SCORE_MINUS = 2,
+};
+
 typedef struct{
     double total_score;
     uint8_t score_type;
+    uint8_t score_direction;
 } DrivingScore;
 #endif
 

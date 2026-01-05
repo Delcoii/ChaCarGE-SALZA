@@ -48,6 +48,9 @@ int main() {
     AlgoState algo_state;
     init_algo_state(&algo_state);
 
+    // 4. Variable for state update
+    uint8_t prev_control_flag = 0;
+
     // 4. Setup High Precision Timing
     struct timespec next_activation;
     // Get current time from monotonic clock (system uptime based, unaffected by system time changes)
@@ -55,12 +58,32 @@ int main() {
 
     // 5. Main Real-time Loop
     while (keep_running) {
+
+        // read the control flag
+        uint8_t curr_control_flag = g_p_shm->given_info.bUseDrivingScoreChecking;
+
         /* ------------------------------------------------------- */
         /* Step A: Execute Algorithm                               */
         /* (Read Input -> Process Logic -> Write Output)           */
         /* ------------------------------------------------------- */
-        update_driving_score(&g_p_shm->given_info, &g_p_shm->generated_info, &algo_state);
+        if(curr_control_flag) {
+            // If control flag is enabled, run the driving score update
+            if(prev_control_flag == 0) {
+                algo_state.is_first_loop = 1; // Reset first loop flag
+            }
+            update_driving_score(&g_p_shm->given_info, &g_p_shm->generated_info, &algo_state);
+        }
+        else {
+            // If control flag is disabled, do not run the algorithm
+            if(prev_control_flag == 1) {
+                g_p_shm->generated_info.driving_score_type.score_type = SCORE_TYPE_NONE;
+                g_p_shm->generated_info.driving_score_type.count = 0;
+            }
+        }
 
+        // Update current control flag state
+        prev_control_flag = curr_control_flag;
+        
         /* ------------------------------------------------------- */
         /* Step B: Calculate Next Wake-up Time                     */
         /* Add exactly 10ms to the target time.                    */
