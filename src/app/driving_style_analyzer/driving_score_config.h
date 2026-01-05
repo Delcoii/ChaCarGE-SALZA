@@ -21,7 +21,7 @@
 #define THRESH_HARD_BRAKE_G         0.20
 #define THRESH_AGGRESSIVE_TURN_G    0.25
 #define THRESH_SUDDEN_ACCEL_G       0.20
-#define THRESH_BUMP_G               0.275  // bump detection threshold
+#define THRESH_BUMP_G               0.20  // bump detection threshold
 
 // Automatic conversion to m/s^2
 #define THRESH_BRAKE_MPS2           (THRESH_HARD_BRAKE_G * GRAVITY_MPS2)
@@ -40,6 +40,7 @@
 /* --- 3. TMAP Segment Config --- */
 #define SEGMENT_DISTANCE_KM         0.05   // 50m Segment
 #define MAX_SEGMENT_HISTORY         6
+#define SEGMENT_TIMEOUT_TICKS       6000   // 6000 ticks = 60s timeout
 
 /* size of Moving Window */
 #define MAX_WINDOW_SIZE             30
