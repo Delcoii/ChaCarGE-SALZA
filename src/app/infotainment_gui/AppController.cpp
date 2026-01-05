@@ -6,8 +6,10 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 AppController::AppController(BaseData& base, RenderingData& rendering, InfotainmentWidget& uiWidget)
     : baseData(base), renderingData(rendering), ui(uiWidget) {}
@@ -71,8 +73,15 @@ void AppController::loadAssets(ImageData& imageData, const QString& assetBasePat
 
 void AppController::producerLoop() {
     // Read from shared memory and update BaseData
-    DrivingScore prevDrivingScore{};
-    bool hasPrevDrivingScore = false;
+    auto mapToUserScoreType = [](ScoreType st, UserData::ScoreType& out) -> bool {
+        switch (st) {
+        case SCORE_BUMP: out = UserData::ScoreType::SPEED_BUMPS; return true;
+        case SCORE_SUDDEN_ACCEL: out = UserData::ScoreType::RAPID_ACCELERATIONS; return true;
+        case SCORE_SUDDEN_CURVE: out = UserData::ScoreType::SHARP_TURNS; return true;
+        case SCORE_IGNORE_SIGN: out = UserData::ScoreType::SIGNAL_VIOLATIONS; return true;
+        default: return false;
+        }
+    };
 
     while (running) {
         if (!shmPtr) {
@@ -93,100 +102,76 @@ void AppController::producerLoop() {
 
         // Driving score
         const ShmGeneratedInfo& generated = shmPtr->generated_info;
-        const bool useDrivingCheck = (generated.bUseDrivingScoreChecking != 0);
-        const DrivingScore& ds = generated.driving_score;
-        const bool scoreTypeValid = ds.score_type <= static_cast<uint8_t>(SCORE_V2V_DISTANCE);
-        const bool directionValid = ds.score_direction <= static_cast<uint8_t>(SCORE_MINUS);
-        const bool scoreFinite = std::isfinite(ds.total_score);
-        const bool hasDelta = scoreFinite && fabs(ds.total_score) > TOLERANCE_DOUBLE;
-        const bool drivingScorePresent = scoreTypeValid && directionValid && hasDelta;
-        uint8_t warningSignal = drivingScorePresent ? ds.score_type : 0xFF;
-        double delta = drivingScorePresent ? ds.total_score : 0.0;
-        uint8_t scoreDirection = drivingScorePresent ? ds.score_direction : static_cast<uint8_t>(SCORE_NORMAL);
-
-        if (useDrivingCheck && drivingScorePresent) {
-            const bool drivingScoreChanged =
-                !hasPrevDrivingScore ||
-                (fabs(ds.total_score - prevDrivingScore.total_score) > TOLERANCE_DOUBLE ||
-                 ds.score_type != prevDrivingScore.score_type ||
-                 ds.score_direction != prevDrivingScore.score_direction);
-            if (drivingScoreChanged) {
-                if (hasPrevDrivingScore) {
-                    std::cout << "[producerLoop] generated_info changed: "
-                              << "total_score " << prevDrivingScore.total_score << " -> " << ds.total_score
-                              << ", score_type " << static_cast<int>(prevDrivingScore.score_type)
-                              << " -> " << static_cast<int>(ds.score_type)
-                              << ", score_direction " << static_cast<int>(prevDrivingScore.score_direction)
-                              << " -> " << static_cast<int>(ds.score_direction)
-                              << std::endl;
-                } else {
-                    std::cout << "[producerLoop] generated_info initial: "
-                              << "total_score=" << ds.total_score
-                              << " score_type=" << static_cast<int>(ds.score_type)
-                              << " score_direction=" << static_cast<int>(ds.score_direction)
-                              << std::endl;
-                }
-            }
-            prevDrivingScore = ds;
-            hasPrevDrivingScore = true;
-        } else {
-            hasPrevDrivingScore = false;
-        }
+        const bool useDrivingCheck = (given.bUseDrivingScoreChecking != 0);
+        const uint16_t rawScoreType = generated.driving_score_type.score_type;
+        const uint16_t rawScoreCount = generated.driving_score_type.count;
+        const bool scoreTypeValid = rawScoreType < static_cast<uint16_t>(SCORE_TYPE_NONE);
+        uint8_t warningSignal = 0xFF;
+        uint8_t emotionEncoded = static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
+        uint8_t scoreDirection = static_cast<uint8_t>(SCORE_NORMAL);
 
         const bool useCheckStarted = useDrivingCheck && !lastUseDrivingCheck;
         const bool useCheckStopped = !useDrivingCheck && lastUseDrivingCheck;
         if (useCheckStarted || useCheckStopped) {
             std::cout << "[AppController] bUseDrivingScoreChecking "
                       << (useDrivingCheck ? "ON" : "OFF")
-                      << " ds: score=" << ds.total_score
-                      << " type=" << static_cast<int>(ds.score_type)
-                      << " dir=" << static_cast<int>(ds.score_direction)
+                      << " total_score=" << generated.total_score
+                      << " type=" << rawScoreType
+                      << " count=" << rawScoreCount
                       << std::endl;
         }
         if (useCheckStarted) {
             activeViolations.clear();
-            lastMinusType = 0xFF;
+            std::fill(lastScoreCounts.begin(), lastScoreCounts.end(), 0);
+            UserData::getInstance().resetCurScores();
         }
 
-        if (!useDrivingCheck || ds.score_direction != static_cast<uint8_t>(SCORE_MINUS)) {
-            lastMinusType = 0xFF;
-        }
+        // Track score changes/counts
+        if (useDrivingCheck && scoreTypeValid) {
+            const ScoreType scoreType = static_cast<ScoreType>(rawScoreType);
+            const size_t scoreIdx = std::min(rawScoreType, static_cast<uint16_t>(lastScoreCounts.size() - 1));
+            const uint16_t prevCount = lastScoreCounts[scoreIdx];
+            lastScoreCounts[scoreIdx] = rawScoreCount;
 
-        if (useDrivingCheck && ds.score_direction == static_cast<uint8_t>(SCORE_MINUS)) {
+            UserData::ScoreType userScoreType;
+            if (mapToUserScoreType(scoreType, userScoreType)) {
+                UserData::getInstance().setCurScore(userScoreType, rawScoreCount);
+            }
+
             const bool trackable =
-                ds.score_type == static_cast<uint8_t>(SCORE_BUMP) ||
-                ds.score_type == static_cast<uint8_t>(SCORE_SUDDEN_ACCEL) ||
-                ds.score_type == static_cast<uint8_t>(SCORE_SUDDEN_CURVE) ||
-                ds.score_type == static_cast<uint8_t>(SCORE_IGNORE_SIGN);
-            if (trackable) {
-                if (ds.score_type != lastMinusType) {
-                    const auto now = std::chrono::system_clock::now().time_since_epoch();
-                    const auto tsMs = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+                scoreType == SCORE_BUMP ||
+                scoreType == SCORE_SUDDEN_ACCEL ||
+                scoreType == SCORE_SUDDEN_CURVE ||
+                scoreType == SCORE_IGNORE_SIGN;
+
+            if (trackable && rawScoreCount > prevCount) {
+                const uint16_t deltaCount = rawScoreCount - prevCount;
+                const auto now = std::chrono::system_clock::now().time_since_epoch();
+                const auto tsMs = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+                for (uint16_t i = 0; i < deltaCount; ++i) {
                     BaseData::ViolationEvent ev{
-                        static_cast<uint8_t>(ds.score_type),
+                        static_cast<uint8_t>(scoreType),
                         static_cast<int64_t>(tsMs)
                     };
                     activeViolations.push_back(ev);
-                    lastMinusType = ds.score_type;
                 }
+                warningSignal = static_cast<uint8_t>(scoreType);
+                emotionEncoded = static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE);
+                scoreDirection = static_cast<uint8_t>(SCORE_MINUS);
             }
         }
-        lastUseDrivingCheck = useDrivingCheck;
 
         // Map score_type -> UserData::ScoreType
-        if (drivingScorePresent &&
-            fabs(delta) > TOLERANCE_DOUBLE &&
-            warningSignal < static_cast<uint8_t>(UserData::ScoreType::MAX_SCORE_TYPES)) {
+        // User total score: average existing score with session score when the check stops
+        if (useCheckStopped) {
             auto& ud = UserData::getInstance();
-            auto st = static_cast<UserData::ScoreType>(warningSignal);
-            ud.adjustCurScore(st, delta);
-            ud.adjustUserTotalScore(delta);
+            const double prevTotal = static_cast<double>(ud.getUserTotalScore());
+            double averaged = (prevTotal + generated.total_score) / 2.0;
+            if (!std::isfinite(averaged)) averaged = 0.0;
+            if (averaged < 0.0) averaged = 0.0;
+            if (averaged > std::numeric_limits<uint16_t>::max()) averaged = std::numeric_limits<uint16_t>::max();
+            ud.setUserTotalScore(static_cast<uint16_t>(std::llround(averaged)));
         }
-        
-        // Jaeyeon : 잘했다, 못했다는 type은 필요해서 세원님이 이 타입은 보내줘야함. 
-        uint8_t emotionEncoded =
-            (delta < TOLERANCE_DOUBLE) ? static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE)
-                        : static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
 
         const auto curFrame = baseData.getFrameDataCopy();
         uint8_t nextDisplay = curFrame.curDisplayType;
@@ -215,6 +200,7 @@ void AppController::producerLoop() {
                       << activeViolations.size() << std::endl;
             activeViolations.clear();
         }
+        lastUseDrivingCheck = useDrivingCheck;
 
         // Prepare latest frame for renderer/UI
         const int bufIdx = acquireRenderBuffer();

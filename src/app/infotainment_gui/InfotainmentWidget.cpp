@@ -485,7 +485,7 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         activeDirection = ScoreDirection::SCORE_NORMAL;
     }
 
-    const bool isSupportedWarning = payload.rawWarningSignal <= static_cast<uint8_t>(ScoreType::SCORE_IGNORE_SIGN);
+    const bool isSupportedWarning = payload.rawWarningSignal <= static_cast<uint8_t>(ScoreType::SCORE_OVER_SPEED);
     const bool shouldActivate =
         forceApply ||
         (isSupportedWarning && !warningActive && static_cast<int>(payload.rawWarningSignal) != lastWarningSignal);
