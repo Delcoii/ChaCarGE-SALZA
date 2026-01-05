@@ -49,7 +49,6 @@ private:
     class QSpacerItem* topSpacer = nullptr;
 
     QLabel* signalLabel = nullptr;
-    QLabel* signalStateLabel = nullptr;
     QLabel* onOffLabel = nullptr;
     QLabel* gifLabel = nullptr;
     QLabel* timeLabel = nullptr;

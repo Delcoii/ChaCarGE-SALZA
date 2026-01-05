@@ -32,24 +32,25 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     setStyleSheet("background: #ffffff; color: #111111; font-family: 'Helvetica Neue', Arial;");
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(24, 20, 24, 24); // lift bottom button
-    root->setSpacing(16);
+    root->setContentsMargins(0, 0, 0, 0); // remove padding so header sits tight to edges
+    root->setSpacing(0); // remove vertical gap between header and content
+
+    // Floating traffic light at top-left (overlay so it doesn't push content down)
+    signalLabel = createImageLabel(1, 1);
+    signalLabel->setScaledContents(false);
+    signalLabel->setStyleSheet("background: transparent; border: none; padding: 0; margin: 0;");
+    signalLabel->setContentsMargins(0, 0, 0, 0);
+    signalLabel->setMargin(0);
+    signalLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    signalLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    signalLabel->setParent(this);
+    signalLabel->raise();
+    signalLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
     auto* header = new QHBoxLayout();
-    header->setSpacing(12);
-
-    // Username above signal icon
-    auto* nameSignalBox = new QVBoxLayout();
-    nameSignalBox->setSpacing(6);
-    nameSignalBox->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
-    signalStateLabel = createImageLabel(32, 32);
-    signalStateLabel->setFixedSize(36, 36);
-    signalStateLabel->setStyleSheet("background: transparent;");
-    signalLabel = createImageLabel(1, 1);
-    nameSignalBox->addWidget(signalStateLabel, 0, Qt::AlignCenter);
-    nameSignalBox->addWidget(signalLabel, 0, Qt::AlignCenter);
-    header->addLayout(nameSignalBox, 0);
-
+    header->setContentsMargins(8, 8, 12, 0); // offset on/off badge from the extreme corner
+    header->setSpacing(0);
+    header->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     header->addStretch();
     onOffLabel = new QLabel("OFF", this);
     onOffLabel->setFixedHeight(24);
@@ -60,11 +61,17 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     root->addLayout(header);
 
     stack = new QStackedLayout();
+    stack->setContentsMargins(0, 0, 0, 0);
+    stack->setSpacing(0);
 
     mainContainer = new QWidget(this);
     auto* body = new QVBoxLayout(mainContainer);
     body->setContentsMargins(0, 0, 0, 0);
-    body->setSpacing(8);
+    body->setSpacing(0);
+
+    // Spacer to keep content below the traffic light overlay
+    topSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
+    body->addSpacerItem(topSpacer);
 
     // Gauge only (no numeric score)
     auto* diamondRow = new QHBoxLayout();
@@ -78,8 +85,6 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
         diamondRow->addWidget(d);
     }
     body->addLayout(diamondRow);
-    topSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Expanding);
-    body->addSpacerItem(topSpacer);
 
     // Content row: GIF left, warning centered in remaining space
     contentRow = new QHBoxLayout();
@@ -228,7 +233,7 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     detailContainer = new QWidget(this);
     auto* detailLayout = new QVBoxLayout(detailContainer);
     detailLayout->setSpacing(10);
-    detailLayout->setContentsMargins(12, 12, 12, 12);
+    detailLayout->setContentsMargins(12, 48, 12, 12); // add top offset so scores sit below the signal
     for (size_t i = 0; i < static_cast<size_t>(UserData::ScoreType::MAX_SCORE_TYPES); ++i) {
         auto* row = new QHBoxLayout();
         row->setSpacing(12);
@@ -284,13 +289,20 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
 InfotainmentWidget::~InfotainmentWidget() = default;
 
 void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) {
-    if (signalStateLabel) {
+    if (signalLabel) {
         const QPixmap* signPix = imageData.getSignImage(payload.signType);
-        if (!signPix) {
-            signPix = imageData.getSignImage(ImageData::SignType::NONE);
+        if (!signPix) signPix = imageData.getSignImage(ImageData::SignType::NONE);
+        const int target = std::max(120, static_cast<int>(height() * 0.16)); // desired size
+        signalLabel->setFixedSize(target, target);
+        if (signPix) {
+            QPixmap scaled = signPix->scaled(target, target, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            signalLabel->setPixmap(scaled);
+        } else {
+            signalLabel->clear();
         }
-        const int headerSize = std::max(24, signalStateLabel->height());
-        setPixmapToLabel(signalStateLabel, signPix, headerSize, headerSize, "");
+        signalLabel->move(8, 8); // slight offset down so it sits just above nearby UI
+        signalLabel->raise();
+        signalLabel->show();
     }
     if (onOffLabel) {
         const bool on = payload.useDrivingScoreCheckActive;
@@ -393,10 +405,7 @@ QPixmap makeSegmentPixmap(const QColor& fill, const QColor& border) {
 } // namespace
 
 void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload) {
-    const int sigSide = std::max(120, static_cast<int>(height() * 0.15));
-    const QPixmap* trafficPix = payload.signImage ? payload.signImage
-                                                  : imageData.getSignImage(ImageData::SignType::NONE);
-    setPixmapToLabel(signalLabel, trafficPix, sigSide, sigSide, "");
+    // signalLabel is updated in showFrame to maintain consistent size/resolution across pages
 
     const double fx = width() / 800.0;
     const double fy = height() / 600.0;
@@ -408,13 +417,14 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     const int gaugeWidth = static_cast<int>(50 * fx);
     const int centerW = static_cast<int>(300 * fx);
     const int centerH = static_cast<int>(300 * fy);
-    const int topMargin = std::max(0, h - centerH - (gaugeHeight + 32) - 120);
     if (contentRow) {
         contentRow->setContentsMargins(leftMargin, 0, rightMargin, 0);
         contentRow->setSpacing(static_cast<int>(100 * fx)); // gap between gif and warning
     }
     if (topSpacer) {
-        topSpacer->changeSize(0, topMargin, QSizePolicy::Fixed, QSizePolicy::Fixed);
+        const int signalHeight = std::max(120, static_cast<int>(height() * 0.16));
+        const int spacerHeight = std::max(20, signalHeight / 2); // leave only half the icon height as gap
+        topSpacer->changeSize(0, spacerHeight, QSizePolicy::Fixed, QSizePolicy::Fixed);
     }
 
     const int gifSize = std::min(centerW, centerH);
@@ -444,10 +454,14 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         (isSupportedWarning && (!warningActive || static_cast<int>(payload.rawWarningSignal) != lastWarningSignal));
     if (shouldActivate) {
         lastWarningSignal = static_cast<int>(payload.rawWarningSignal);
-        activeWarningPixmap = imageData.getSignImage(warningSignFromScore(payload.rawWarningSignal));
-        warningActive = (activeWarningPixmap != nullptr);
-        warningTimer.restart();
-
+        const auto warnType = warningSignFromScore(payload.rawWarningSignal);
+        activeWarningPixmap = (warnType != ImageData::SignType::NONE) ? imageData.getSignImage(warnType) : nullptr;
+        warningActive = (activeWarningPixmap != nullptr) && payload.useDrivingScoreCheckActive;
+        if (warningActive) {
+            warningTimer.restart();
+        } else {
+            warningTimer.invalidate();
+        }
         const ScoreDirection incoming = static_cast<ScoreDirection>(payload.scoreDirection);
         if (incoming == ScoreDirection::SCORE_PLUS || incoming == ScoreDirection::SCORE_MINUS) {
             activeDirection = incoming;
@@ -455,6 +469,11 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         } else {
             activeDirection = ScoreDirection::SCORE_NORMAL;
         }
+    } else if (!isSupportedWarning || !payload.useDrivingScoreCheckActive) {
+        warningActive = false;
+        activeWarningPixmap = nullptr;
+        warningTimer.invalidate();
+        lastWarningSignal = -1;
     }
 
     const bool emojiWindow =
