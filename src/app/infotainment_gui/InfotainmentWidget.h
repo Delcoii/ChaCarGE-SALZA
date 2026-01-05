@@ -49,7 +49,6 @@ private:
     class QSpacerItem* topSpacer = nullptr;
 
     QLabel* signalLabel = nullptr;
-    QLabel* headerTitle = nullptr;
     QLabel* onOffLabel = nullptr;
     QLabel* gifLabel = nullptr;
     QLabel* timeLabel = nullptr;
@@ -70,6 +69,8 @@ private:
     int sideSizePx = 32;
     QLabel* warningLabel = nullptr;
     QPixmap warningEmpty;
+    QLabel* leftWarningArc = nullptr;
+    QLabel* rightWarningArc = nullptr;
     QMovie* happyGif = nullptr;
     QMovie* badGif = nullptr;
     QMovie* currentGif = nullptr;

@@ -8,6 +8,7 @@
 #include <QProgressBar>
 #include <QPainter>
 #include <QTransform>
+#include <QPainterPath>
 #include <QColor>
 #include <QFrame>
 #include <QSpacerItem>
@@ -32,24 +33,25 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     setStyleSheet("background: #ffffff; color: #111111; font-family: 'Helvetica Neue', Arial;");
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(24, 20, 24, 24); // lift bottom button
-    root->setSpacing(16);
+    root->setContentsMargins(0, 0, 0, 0); // remove padding so header sits tight to edges
+    root->setSpacing(0); // remove vertical gap between header and content
+
+    // Floating traffic light at top-left (overlay so it doesn't push content down)
+    signalLabel = createImageLabel(1, 1);
+    signalLabel->setScaledContents(false);
+    signalLabel->setStyleSheet("background: transparent; border: none; padding: 0; margin: 0;");
+    signalLabel->setContentsMargins(0, 0, 0, 0);
+    signalLabel->setMargin(0);
+    signalLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    signalLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    signalLabel->setParent(this);
+    signalLabel->raise();
+    signalLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
     auto* header = new QHBoxLayout();
-    header->setSpacing(12);
-
-    // Username above signal icon
-    auto* nameSignalBox = new QVBoxLayout();
-    nameSignalBox->setSpacing(6);
-    nameSignalBox->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
-    headerTitle = new QLabel("Mr.Tele", this);
-    headerTitle->setAlignment(Qt::AlignCenter);
-    headerTitle->setStyleSheet("font-size: 22px; font-weight: 800; color: #0a4f91;");
-    signalLabel = createImageLabel(1, 1);
-    nameSignalBox->addWidget(headerTitle, 0, Qt::AlignCenter);
-    nameSignalBox->addWidget(signalLabel, 0, Qt::AlignCenter);
-    header->addLayout(nameSignalBox, 0);
-
+    header->setContentsMargins(8, 8, 12, 0); // offset on/off badge from the extreme corner
+    header->setSpacing(0);
+    header->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     header->addStretch();
     onOffLabel = new QLabel("OFF", this);
     onOffLabel->setFixedHeight(24);
@@ -60,11 +62,28 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     root->addLayout(header);
 
     stack = new QStackedLayout();
+    stack->setContentsMargins(0, 0, 0, 0);
+    stack->setSpacing(0);
 
     mainContainer = new QWidget(this);
+
+    // translucent warning arcs (hidden by default)
+    leftWarningArc = new QLabel(this);
+    leftWarningArc->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    leftWarningArc->setStyleSheet("background: transparent;");
+    leftWarningArc->hide();
+    rightWarningArc = new QLabel(this);
+    rightWarningArc->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    rightWarningArc->setStyleSheet("background: transparent;");
+    rightWarningArc->hide();
+
     auto* body = new QVBoxLayout(mainContainer);
     body->setContentsMargins(0, 0, 0, 0);
-    body->setSpacing(8);
+    body->setSpacing(0);
+
+    // Spacer to keep content below the traffic light overlay
+    topSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
+    body->addSpacerItem(topSpacer);
 
     // Gauge only (no numeric score)
     auto* diamondRow = new QHBoxLayout();
@@ -78,8 +97,6 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
         diamondRow->addWidget(d);
     }
     body->addLayout(diamondRow);
-    topSpacer = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Expanding);
-    body->addSpacerItem(topSpacer);
 
     // Content row: GIF left, warning centered in remaining space
     contentRow = new QHBoxLayout();
@@ -176,7 +193,7 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     steeringCol->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
     steeringLabel = createImageLabel(140, 140);
     steeringLabel->setStyleSheet("background: transparent;");
-    steeringTextLabel = new QLabel("Steer", this);
+    steeringTextLabel = new QLabel("0.0", this);
     steeringTextLabel->setStyleSheet("font-size: 16px; font-weight: 700; color: #111111;");
     steeringTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
     steeringCol->addWidget(steeringLabel, 0, Qt::AlignHCenter | Qt::AlignBottom);
@@ -228,7 +245,7 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     detailContainer = new QWidget(this);
     auto* detailLayout = new QVBoxLayout(detailContainer);
     detailLayout->setSpacing(10);
-    detailLayout->setContentsMargins(12, 12, 12, 12);
+    detailLayout->setContentsMargins(12, 48, 12, 12); // add top offset so scores sit below the signal
     for (size_t i = 0; i < static_cast<size_t>(UserData::ScoreType::MAX_SCORE_TYPES); ++i) {
         auto* row = new QHBoxLayout();
         row->setSpacing(12);
@@ -284,8 +301,21 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
 InfotainmentWidget::~InfotainmentWidget() = default;
 
 void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) {
-    // Update username from UserData (via payload.userTotalScore owner)
-    headerTitle->setText("Mr.Tele");
+    if (signalLabel) {
+        const QPixmap* signPix = imageData.getSignImage(payload.signType);
+        if (!signPix) signPix = imageData.getSignImage(ImageData::SignType::NONE);
+        const int target = std::max(120, static_cast<int>(height() * 0.16)); // desired size
+        signalLabel->setFixedSize(target, target);
+        if (signPix) {
+            QPixmap scaled = signPix->scaled(target, target, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            signalLabel->setPixmap(scaled);
+        } else {
+            signalLabel->clear();
+        }
+        signalLabel->move(8, 8); // slight offset down so it sits just above nearby UI
+        signalLabel->raise();
+        signalLabel->show();
+    }
     if (onOffLabel) {
         const bool on = payload.useDrivingScoreCheckActive;
         onOffLabel->setText(on ? "ON" : "OFF");
@@ -384,12 +414,35 @@ QPixmap makeSegmentPixmap(const QColor& fill, const QColor& border) {
     p.drawRoundedRect(QRect(1, 1, w - 2, h - 2), 2, 2);
     return pm;
 }
+
+QPixmap makeWarningArc(int w, int h, bool left) {
+    QPixmap pm(w, h);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    const QColor fill(255, 0, 0, 30);
+    p.setPen(Qt::NoPen);
+    p.setBrush(fill);
+
+    QPainterPath path;
+    if (left) {
+        path.moveTo(0, 0);
+        path.arcTo(QRectF(-w, 0, 2 * w, h), 90, -180);
+        path.lineTo(0, h / 2);
+    } else {
+        path.moveTo(w, 0);
+        path.arcTo(QRectF(0, 0, 2 * w, h), 90, 180);
+        path.lineTo(w, h / 2);
+    }
+    path.closeSubpath();
+    p.drawPath(path);
+    return pm;
+}
 } // namespace
 
 void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload) {
-    const int sigSide = std::max(120, static_cast<int>(height() * 0.15));
-    const bool hasTraffic = (payload.rawSignSignal != 0) && payload.signImage;
-    setPixmapToLabel(signalLabel, hasTraffic ? payload.signImage : nullptr, sigSide, sigSide, "");
+    // signalLabel is updated in showFrame to maintain consistent size/resolution across pages
 
     const double fx = width() / 800.0;
     const double fy = height() / 600.0;
@@ -401,13 +454,14 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     const int gaugeWidth = static_cast<int>(50 * fx);
     const int centerW = static_cast<int>(300 * fx);
     const int centerH = static_cast<int>(300 * fy);
-    const int topMargin = std::max(0, h - centerH - (gaugeHeight + 32) - 120);
     if (contentRow) {
         contentRow->setContentsMargins(leftMargin, 0, rightMargin, 0);
         contentRow->setSpacing(static_cast<int>(100 * fx)); // gap between gif and warning
     }
     if (topSpacer) {
-        topSpacer->changeSize(0, topMargin, QSizePolicy::Fixed, QSizePolicy::Fixed);
+        const int signalHeight = std::max(120, static_cast<int>(height() * 0.16));
+        const int spacerHeight = std::max(20, signalHeight / 2); // leave only half the icon height as gap
+        topSpacer->changeSize(0, spacerHeight, QSizePolicy::Fixed, QSizePolicy::Fixed);
     }
 
     const int gifSize = std::min(centerW, centerH);
@@ -434,13 +488,17 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     const bool isSupportedWarning = payload.rawWarningSignal <= static_cast<uint8_t>(ScoreType::SCORE_IGNORE_SIGN);
     const bool shouldActivate =
         forceApply ||
-        (isSupportedWarning && (!warningActive || static_cast<int>(payload.rawWarningSignal) != lastWarningSignal));
+        (isSupportedWarning && !warningActive && static_cast<int>(payload.rawWarningSignal) != lastWarningSignal);
     if (shouldActivate) {
         lastWarningSignal = static_cast<int>(payload.rawWarningSignal);
-        activeWarningPixmap = imageData.getSignImage(warningSignFromScore(payload.rawWarningSignal));
-        warningActive = (activeWarningPixmap != nullptr);
-        warningTimer.restart();
-
+        const auto warnType = warningSignFromScore(payload.rawWarningSignal);
+        activeWarningPixmap = (warnType != ImageData::SignType::NONE) ? imageData.getSignImage(warnType) : nullptr;
+        warningActive = (activeWarningPixmap != nullptr) && payload.useDrivingScoreCheckActive;
+        if (warningActive) {
+            warningTimer.restart();
+        } else {
+            warningTimer.invalidate();
+        }
         const ScoreDirection incoming = static_cast<ScoreDirection>(payload.scoreDirection);
         if (incoming == ScoreDirection::SCORE_PLUS || incoming == ScoreDirection::SCORE_MINUS) {
             activeDirection = incoming;
@@ -448,6 +506,11 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         } else {
             activeDirection = ScoreDirection::SCORE_NORMAL;
         }
+    } else if (!isSupportedWarning || !payload.useDrivingScoreCheckActive) {
+        warningActive = false;
+        activeWarningPixmap = nullptr;
+        warningTimer.invalidate();
+        lastWarningSignal = -1;
     }
 
     const bool emojiWindow =
@@ -496,6 +559,30 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         warningLabel->setPixmap(warningEmpty);
     }
 
+    if (leftWarningArc && rightWarningArc) {
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        const bool blinkOn = ((nowMs / 300) % 2) == 0; // 300ms on/off cycle
+        const bool showArc = warningActive && activeWarningPixmap &&
+                             payload.displayType == RenderingData::DisplayType::Dashboard &&
+                             blinkOn;
+        if (showArc) {
+            const int arcW = std::max(100, static_cast<int>(h * 0.3)); // span top->bottom (0,0)-(0,h)
+            const int arcH = h;
+            const int y = 0;
+            leftWarningArc->setPixmap(makeWarningArc(arcW, arcH, true));
+            rightWarningArc->setPixmap(makeWarningArc(arcW, arcH, false));
+            leftWarningArc->setGeometry(0, y, arcW, arcH);
+            rightWarningArc->setGeometry(width() - arcW, y, arcW, arcH);
+            leftWarningArc->raise();
+            rightWarningArc->raise();
+            leftWarningArc->show();
+            rightWarningArc->show();
+        } else {
+            leftWarningArc->hide();
+            rightWarningArc->hide();
+        }
+    }
+
     if (gaugeContainer) {
         // ensure layout reserves room for the gauges + labels
         gaugeContainer->setMinimumHeight(gaugeHeight + 32);
@@ -514,9 +601,11 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     if (steeringLabel) {
         steeringLabel->setFixedSize(steerWidth, gaugeHeight);
     }
+    if (steeringTextLabel) {
+        steeringTextLabel->setFixedWidth(steerWidth);
+    }
     if (throttleBar) throttleBar->setFixedSize(gaugeWidth, gaugeHeight);
     if (brakeBar) brakeBar->setFixedSize(gaugeWidth, gaugeHeight);
-    if (steeringTextLabel) steeringTextLabel->setText("Steer");
     if (throttleLabel) throttleLabel->setText("A");
     if (brakeLabel) brakeLabel->setText("B");
 
@@ -547,6 +636,12 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         } else {
             steeringLabel->setText("No wheel");
         }
+    }
+    if (steeringTextLabel) {
+        const double val = payload.steerAngleDeg;
+        const bool isZero = qFuzzyIsNull(val);
+        steeringTextLabel->setText(isZero ? QString::number(0.0, 'f', 1)
+                                          : QString::asprintf("%+.1f", val));
     }
 
     // update score gauge only (no numeric text)

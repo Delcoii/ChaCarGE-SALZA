@@ -51,6 +51,7 @@ void AppController::loadAssets(ImageData& imageData, const QString& assetBasePat
 
     imageData.loadDefaultImage(ImageData::DefaultImageType::MENU_ICON_1, path("button.png"));
     imageData.loadDefaultImage(ImageData::DefaultImageType::SIGNAL_CORNER, path("Signal.png"));
+    imageData.loadSignImage(ImageData::SignType::NONE, path("signal_none.png"));
     imageData.loadSignImage(ImageData::SignType::TRAFFIC_RED, path("signal_red.png"));
     imageData.loadSignImage(ImageData::SignType::TRAFFIC_YELLOW, path("signal_yellow.png"));
     imageData.loadSignImage(ImageData::SignType::TRAFFIC_GREEN, path("signal_green.png"));

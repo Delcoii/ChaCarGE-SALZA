@@ -81,8 +81,8 @@ void RenderingData::composeFrame(RenderPayload& payload) {
         break;
     }
 
-    // Even for the default screen, fill signImage when a signal exists so the widget renders
-    if (!payload.signImage && payload.signType != ImageData::SignType::NONE) {
+    // Fill signImage for any sign type (including NONE) so the widget can render a default placeholder
+    if (!payload.signImage) {
         payload.signImage = imageData.getSignImage(payload.signType);
     }
 }
