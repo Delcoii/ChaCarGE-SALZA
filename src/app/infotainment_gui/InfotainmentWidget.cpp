@@ -8,6 +8,7 @@
 #include <QProgressBar>
 #include <QPainter>
 #include <QTransform>
+#include <QPainterPath>
 #include <QColor>
 #include <QFrame>
 #include <QSpacerItem>
@@ -65,6 +66,17 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     stack->setSpacing(0);
 
     mainContainer = new QWidget(this);
+
+    // translucent warning arcs (hidden by default)
+    leftWarningArc = new QLabel(this);
+    leftWarningArc->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    leftWarningArc->setStyleSheet("background: transparent;");
+    leftWarningArc->hide();
+    rightWarningArc = new QLabel(this);
+    rightWarningArc->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    rightWarningArc->setStyleSheet("background: transparent;");
+    rightWarningArc->hide();
+
     auto* body = new QVBoxLayout(mainContainer);
     body->setContentsMargins(0, 0, 0, 0);
     body->setSpacing(0);
@@ -402,6 +414,31 @@ QPixmap makeSegmentPixmap(const QColor& fill, const QColor& border) {
     p.drawRoundedRect(QRect(1, 1, w - 2, h - 2), 2, 2);
     return pm;
 }
+
+QPixmap makeWarningArc(int w, int h, bool left) {
+    QPixmap pm(w, h);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    const QColor fill(255, 0, 0, 30);
+    p.setPen(Qt::NoPen);
+    p.setBrush(fill);
+
+    QPainterPath path;
+    if (left) {
+        path.moveTo(0, 0);
+        path.arcTo(QRectF(-w, 0, 2 * w, h), 90, -180);
+        path.lineTo(0, h / 2);
+    } else {
+        path.moveTo(w, 0);
+        path.arcTo(QRectF(0, 0, 2 * w, h), 90, 180);
+        path.lineTo(w, h / 2);
+    }
+    path.closeSubpath();
+    p.drawPath(path);
+    return pm;
+}
 } // namespace
 
 void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload) {
@@ -451,7 +488,7 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     const bool isSupportedWarning = payload.rawWarningSignal <= static_cast<uint8_t>(ScoreType::SCORE_IGNORE_SIGN);
     const bool shouldActivate =
         forceApply ||
-        (isSupportedWarning && (!warningActive || static_cast<int>(payload.rawWarningSignal) != lastWarningSignal));
+        (isSupportedWarning && !warningActive && static_cast<int>(payload.rawWarningSignal) != lastWarningSignal);
     if (shouldActivate) {
         lastWarningSignal = static_cast<int>(payload.rawWarningSignal);
         const auto warnType = warningSignFromScore(payload.rawWarningSignal);
@@ -520,6 +557,30 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
             warningEmpty.fill(Qt::transparent);
         }
         warningLabel->setPixmap(warningEmpty);
+    }
+
+    if (leftWarningArc && rightWarningArc) {
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        const bool blinkOn = ((nowMs / 300) % 2) == 0; // 300ms on/off cycle
+        const bool showArc = warningActive && activeWarningPixmap &&
+                             payload.displayType == RenderingData::DisplayType::Dashboard &&
+                             blinkOn;
+        if (showArc) {
+            const int arcW = std::max(100, static_cast<int>(h * 0.3)); // span top->bottom (0,0)-(0,h)
+            const int arcH = h;
+            const int y = 0;
+            leftWarningArc->setPixmap(makeWarningArc(arcW, arcH, true));
+            rightWarningArc->setPixmap(makeWarningArc(arcW, arcH, false));
+            leftWarningArc->setGeometry(0, y, arcW, arcH);
+            rightWarningArc->setGeometry(width() - arcW, y, arcW, arcH);
+            leftWarningArc->raise();
+            rightWarningArc->raise();
+            leftWarningArc->show();
+            rightWarningArc->show();
+        } else {
+            leftWarningArc->hide();
+            rightWarningArc->hide();
+        }
     }
 
     if (gaugeContainer) {
