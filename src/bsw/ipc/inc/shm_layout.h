@@ -14,12 +14,12 @@ typedef struct {
     TrafficSignState traffic_state;
     VehicleCommand vehicle_command;
     DriveDistance drive_distance;
+    uint8_t bUseDrivingScoreChecking;
 } ShmGivenInfo;
 
 // shared memory for Data for main apu
 typedef struct {
     DrivingScore driving_score;
-    uint8_t bUseDrivingScoreChecking;
 } ShmGeneratedInfo;
 
 // Integrated shared memory structure
