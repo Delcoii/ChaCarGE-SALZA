@@ -12,7 +12,7 @@ if [ ! -x "$BIN" ]; then
     exit 1
 fi
 
-# Move to binary directory (mirrors the csv replayer script style)
+# Move to binary directory 
 BIN_DIR=$(dirname "$BIN")
 echo "Changing to executable directory: $BIN_DIR"
 cd "$BIN_DIR" || { echo "[ERROR] Could not change to directory $BIN_DIR"; exit 1; }
