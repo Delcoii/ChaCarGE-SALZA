@@ -10,9 +10,6 @@ void init_algo_state(AlgoState* state) {
     state->is_first_loop = 1;
 
     // MA Buffer Init
-    state->acc_z_idx = 0;
-    state->acc_z_sum = 0.0;
-    state->is_buffer_full = 0;
     state->bias_acc_z = -9.80665; // Assuming stationary at start
 
     // Default score is 100 for all segments
@@ -77,6 +74,7 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
         state->bump_cooldown_ticks = 0;
 
         state->bias_acc_z = raw_acc_z; // Calibrate bias
+        state->prev_acc_z = state->bias_acc_z;
 
         // Initialize MA Buffer with first value
         for(int i=0; i<MAX_WINDOW_SIZE; ++i){
@@ -87,18 +85,19 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
         state->is_buffer_full = 1;
 
         state->is_first_loop = 0;
-    } else {
-        delta_dist = current_dist - state->prev_total_distance_km;
-        if (delta_dist < 0) {
-            delta_dist = 0.0;
-        }
-
-        // for testing does distance really need
-        if (delta_dist == 0)
-        {
-            delta_dist = 0.00001;
-        } 
     }
+    // else {
+    //     delta_dist = current_dist - state->prev_total_distance_km;
+    //     if (delta_dist < 0) {
+    //         delta_dist = 0.0;
+    //     }
+
+    //     // for testing does distance really need
+    //     if (delta_dist == 0)
+    //     {
+    //         delta_dist = 0.00001;
+    //     } 
+    // }
     state->prev_total_distance_km = current_dist;
 
     // 3. Update Segment Data
@@ -116,7 +115,9 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     state->acc_z_idx = (state->acc_z_idx + 1) % MAX_WINDOW_SIZE;
 
     double filtered_acc_z = state->acc_z_sum / (double)MAX_WINDOW_SIZE;
-    
+    // double filtered_acc_z = raw_acc_z * LPF_ALPHA + state->prev_acc_z * (1.0 - LPF_ALPHA);
+    // state->prev_acc_z = filtered_acc_z; // Update previous value for next iteration
+
     // [B] Throttle Rate Calculation (% per sec)
     // dt = 0.01s (10ms)
     double throttle_rate = (throttle - state->prev_throttle) / 0.01;
@@ -130,22 +131,16 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     // Priority: Signal Violation > Sudden Curve > Sudden Accel/Brake > None
     // We check in reverse order of priority or use else-if carefully.
     
-    int event_detected = 0;
-
-    state->sudden_accel_count = 0;
-    state->sudden_curve_count = 0;
-    state->bump_count = 0;
-    state->signal_violation_count = 0;
 
     output->driving_score_type.score_type = SCORE_TYPE_NONE; // Reset first
     output->driving_score_type.count = 0;
 
     // (A) Signal Violation (Highest Priority)
-    if (state->prev_traffic_state == TRAFFIC_STATE_RED && traffic == TRAFFIC_STATE_NONE && state->prev_throttle > 0.0) {
+    if (state->prev_traffic_state == TRAFFIC_STATE_RED && traffic == TRAFFIC_STATE_NONE && state->prev_throttle > 50.0) {
         curr_seg->signal_violation_ticks++;
         output->driving_score_type.count = ++state->signal_violation_count;
         output->driving_score_type.score_type = SCORE_IGNORE_SIGN;
-        event_detected = 1;
+        state->event_detected = 1;
     }
 
     /*Countinuos Events Check*/
@@ -153,7 +148,7 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     int is_accel = (throttle_rate > THRESH_THROTTLE_RATE_PPS && throttle > MIN_THROTTLE_FOR_ACCEL);
     //int is_brake = (acc_x < -THRESH_BRAKE_MPS2);
     
-    if (!event_detected) {
+    if (!state->event_detected) {
         // (B) Sudden Curve (If no higher priority event)
         if(is_turning || is_accel/* || is_brake*/) {
             if(!state->is_continuous_event_active) {
@@ -177,7 +172,7 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
         else {
             state->is_continuous_event_active = 0; // Reset flag
 
-            if(state->bump_cooldown_ticks == 0 && fabs(state->bias_acc_z - filtered_acc_z) > THRESH_BUMP_MPS2) {
+            if(state->bump_cooldown_ticks == 0 && (filtered_acc_z) >= (-2.0) ) {
                 curr_seg->bump_ticks++;
                 output->driving_score_type.score_type = SCORE_BUMP;
                 output->driving_score_type.count = ++state->bump_count;
