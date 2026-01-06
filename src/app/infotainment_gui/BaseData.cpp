@@ -10,7 +10,9 @@ BaseData::BaseData()
         ImageData::getInstance(), // imageData reference
         4,  // curDisplayType (default to dashboard view)
         false, // useDrivingScoreCheck
-        {} // violations
+        {}, // violations
+        -1, // sessionStartMs
+        -1  // sessionEndMs
     }
 {
 }
@@ -31,7 +33,9 @@ void BaseData::setFrameSignals(const RawData& rawData,
                                uint8_t scoreDirection,
                                uint8_t displayType,
                                bool useDrivingScoreCheck,
-                               std::vector<ViolationEvent> violations) {
+                               std::vector<ViolationEvent> violations,
+                               int64_t sessionStartMs,
+                               int64_t sessionEndMs) {
     std::lock_guard<std::mutex> lock(mtx);
     curFrameData.rawData = rawData;
     curFrameData.warningSignal = warningSignal;
@@ -40,6 +44,8 @@ void BaseData::setFrameSignals(const RawData& rawData,
     curFrameData.curDisplayType = displayType;
     curFrameData.useDrivingScoreCheck = useDrivingScoreCheck;
     curFrameData.violations = std::move(violations);
+    curFrameData.sessionStartMs = sessionStartMs;
+    curFrameData.sessionEndMs = sessionEndMs;
 }
 
 uint8_t BaseData::getCurDisplayType() const {

@@ -80,6 +80,7 @@ private:
     QElapsedTimer warningTimer;
     int warningShowMs = 3000;
     int lastWarningSignal = -1;
+    bool lastUseDrivingScoreActive = false;
     bool warningActive = false;
     const QPixmap* activeWarningPixmap = nullptr;
     int lastDisplayType = -1;

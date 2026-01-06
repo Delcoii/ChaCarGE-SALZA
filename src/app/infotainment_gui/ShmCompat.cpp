@@ -2,6 +2,7 @@
 
 #include <fcntl.h>
 #include <stdio.h>
+#include <errno.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -9,18 +10,26 @@
 
 extern "C" ShmIntegrated* init_shared_memory(void)
 {
-    int shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
+    bool created = true;
+    int shm_fd = shm_open(SHM_NAME, O_CREAT | O_EXCL | O_RDWR, 0666);
+    if (shm_fd == -1 && errno == EEXIST) {
+        // Already exists; open without recreating/clearing
+        created = false;
+        shm_fd = shm_open(SHM_NAME, O_RDWR, 0666);
+    }
     if (shm_fd == -1)
     {
         perror("[init_shm] shm_open failed");
         return NULL;
     }
 
-    if (ftruncate(shm_fd, SHM_SIZE) == -1)
-    {
-        perror("[init_shm] ftruncate failed");
-        close(shm_fd);
-        return NULL;
+    if (created) {
+        if (ftruncate(shm_fd, SHM_SIZE) == -1)
+        {
+            perror("[init_shm] ftruncate failed");
+            close(shm_fd);
+            return NULL;
+        }
     }
 
     ShmIntegrated* p_shm = (ShmIntegrated*)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
@@ -30,8 +39,11 @@ extern "C" ShmIntegrated* init_shared_memory(void)
         close(shm_fd);
         return NULL;
     }
-    // Ensure clean initialization so new fields (e.g., bUseDrivingScoreChecking) start at 0
-    memset(p_shm, 0, SHM_SIZE);
+    if (created) {
+        // Ensure clean initialization only when creating the segment
+        memset(p_shm, 0, SHM_SIZE);
+        p_shm->generated_info.driving_score_type.score_type = SCORE_TYPE_NONE;
+    }
 
     close(shm_fd);
     return p_shm;

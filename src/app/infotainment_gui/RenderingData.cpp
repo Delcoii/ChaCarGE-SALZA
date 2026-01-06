@@ -34,6 +34,8 @@ void RenderingData::composeFrame(RenderPayload& payload) {
     payload.scoreDirection = frame.scoreDirection;
     payload.useDrivingScoreCheckActive = frame.useDrivingScoreCheck;
     payload.violations = frame.violations;
+    payload.sessionStartMs = frame.sessionStartMs;
+    payload.sessionEndMs = frame.sessionEndMs;
 
     payload.signType = toSignType(frame.rawData.signSignal);
     payload.warningType = toWarningType(frame.warningSignal);

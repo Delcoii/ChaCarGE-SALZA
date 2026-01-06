@@ -42,8 +42,12 @@ private:
     std::atomic<bool> running{false};
     ShmIntegrated* shmPtr = nullptr;
     bool lastUseDrivingCheck = false;
+    uint16_t lastRawScoreType = 0xFFFF; // track changes while driving score check is on
+    int64_t sessionStartMs = -1;
+    int64_t sessionEndMs = -1;
     std::vector<BaseData::ViolationEvent> activeViolations;
     std::array<uint16_t, static_cast<size_t>(ScoreType::SCORE_TYPE_NONE) + 1> lastScoreCounts{};
+    std::array<uint16_t, static_cast<size_t>(ScoreType::SCORE_TYPE_NONE) + 1> typeChangeCounts{};
 
     static constexpr int kRenderBufferCount = 3;
     std::array<RenderingData::RenderPayload, kRenderBufferCount> renderBuffers{};

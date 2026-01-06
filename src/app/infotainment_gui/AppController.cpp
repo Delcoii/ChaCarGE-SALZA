@@ -39,7 +39,9 @@ void AppController::stop() {
                              frame.scoreDirection,
                              4,
                              false,
-                             {});
+                             {},
+                             frame.sessionStartMs,
+                             frame.sessionEndMs);
 }
 
 void AppController::join() {
@@ -106,9 +108,18 @@ void AppController::producerLoop() {
         const uint16_t rawScoreType = generated.driving_score_type.score_type;
         const uint16_t rawScoreCount = generated.driving_score_type.count;
         const bool scoreTypeValid = rawScoreType < static_cast<uint16_t>(ScoreType::SCORE_TYPE_NONE);
-        uint8_t warningSignal = 0xFF;
-        uint8_t emotionEncoded = static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
-        uint8_t scoreDirection = static_cast<uint8_t>(ScoreDirection::SCORE_NORMAL);
+        const bool isNoneType = scoreTypeValid &&
+            rawScoreType == static_cast<uint16_t>(ScoreType::SCORE_TYPE_NONE);
+        uint8_t warningSignal = (!isNoneType && scoreTypeValid)
+                                    ? static_cast<uint8_t>(rawScoreType)
+                                    : 0xFF;
+        uint8_t emotionEncoded = (!isNoneType && scoreTypeValid)
+                                    ? static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE)
+                                    : static_cast<uint8_t>(ImageData::EmotionGifType::HAPPY);
+        uint8_t scoreDirection = (!isNoneType && scoreTypeValid)
+                                    ? static_cast<uint8_t>(ScoreDirection::SCORE_MINUS)
+                                    : static_cast<uint8_t>(ScoreDirection::SCORE_NORMAL);
+        bool typeChanged = false;
 
         const bool useCheckStarted = useDrivingCheck && !lastUseDrivingCheck;
         const bool useCheckStopped = !useDrivingCheck && lastUseDrivingCheck;
@@ -123,19 +134,36 @@ void AppController::producerLoop() {
         if (useCheckStarted) {
             activeViolations.clear();
             std::fill(lastScoreCounts.begin(), lastScoreCounts.end(), 0);
+            std::fill(typeChangeCounts.begin(), typeChangeCounts.end(), 0);
             UserData::getInstance().resetCurScores();
+            // Baseline to NONE so the first non-NONE type triggers immediately
+            lastRawScoreType = static_cast<uint16_t>(ScoreType::SCORE_TYPE_NONE);
+            const auto now = std::chrono::system_clock::now().time_since_epoch();
+            sessionStartMs = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+            sessionEndMs = -1;
+        }
+
+        if (useDrivingCheck && scoreTypeValid && rawScoreType != lastRawScoreType) {
+            std::cout << "[AppController] score_type change -> type=" << rawScoreType
+                      << " count=" << rawScoreCount
+                      << " total_score=" << generated.total_score
+                      << std::endl;
+            typeChanged = true;
         }
 
         // Track score changes/counts
         if (useDrivingCheck && scoreTypeValid) {
             const ScoreType scoreType = static_cast<ScoreType>(rawScoreType);
             const size_t scoreIdx = std::min(rawScoreType, static_cast<uint16_t>(lastScoreCounts.size() - 1));
-            const uint16_t prevCount = lastScoreCounts[scoreIdx];
             lastScoreCounts[scoreIdx] = rawScoreCount;
 
             UserData::ScoreType userScoreType;
             if (mapToUserScoreType(scoreType, userScoreType)) {
-                UserData::getInstance().setCurScore(userScoreType, rawScoreCount);
+                // Only increment UI counters when the score type actually changes
+                if (typeChanged) {
+                    typeChangeCounts[scoreIdx] = static_cast<uint16_t>(typeChangeCounts[scoreIdx] + 1);
+                    UserData::getInstance().setCurScore(userScoreType, typeChangeCounts[scoreIdx]);
+                }
             }
 
             const bool trackable =
@@ -144,17 +172,16 @@ void AppController::producerLoop() {
                 scoreType == ScoreType::SCORE_SUDDEN_CURVE ||
                 scoreType == ScoreType::SCORE_IGNORE_SIGN;
 
-            if (trackable && rawScoreCount > prevCount) {
-                const uint16_t deltaCount = rawScoreCount - prevCount;
-                const auto now = std::chrono::system_clock::now().time_since_epoch();
-                const auto tsMs = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-                for (uint16_t i = 0; i < deltaCount; ++i) {
-                    BaseData::ViolationEvent ev{
-                        static_cast<uint8_t>(scoreType),
-                        static_cast<int64_t>(tsMs)
-                    };
-                    activeViolations.push_back(ev);
-                }
+            const auto now = std::chrono::system_clock::now().time_since_epoch();
+            const auto tsMs = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+
+            // Record/trigger only when the score type changes
+            if (trackable && typeChanged) {
+                BaseData::ViolationEvent ev{
+                    static_cast<uint8_t>(scoreType),
+                    static_cast<int64_t>(tsMs)
+                };
+                activeViolations.push_back(ev);
                 warningSignal = static_cast<uint8_t>(scoreType);
                 emotionEncoded = static_cast<uint8_t>(ImageData::EmotionGifType::BAD_FACE);
                 scoreDirection = static_cast<uint8_t>(ScoreDirection::SCORE_MINUS);
@@ -171,6 +198,12 @@ void AppController::producerLoop() {
             if (averaged < 0.0) averaged = 0.0;
             if (averaged > std::numeric_limits<uint16_t>::max()) averaged = std::numeric_limits<uint16_t>::max();
             ud.setUserTotalScore(static_cast<uint16_t>(std::llround(averaged)));
+            lastRawScoreType = 0xFFFF;
+            const auto now = std::chrono::system_clock::now().time_since_epoch();
+            sessionEndMs = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+        }
+        if (scoreTypeValid) {
+            lastRawScoreType = rawScoreType;
         }
 
         const auto curFrame = baseData.getFrameDataCopy();
@@ -194,7 +227,9 @@ void AppController::producerLoop() {
                                  scoreDirection,
                                  nextDisplay,
                                  useDrivingCheck,
-                                 std::move(violationsForFrame));
+                                 std::move(violationsForFrame),
+                                 sessionStartMs,
+                                 sessionEndMs);
         if (useCheckStopped) {
             std::cout << "[AppController] switching to History, violations count="
                       << activeViolations.size() << std::endl;
