@@ -25,9 +25,15 @@ QString makeAbsolutePath(const QString& relative) {
 int main(int argc, char* argv[]) {
     // Avoid unstable platform theme plugins
     qputenv("QT_QPA_PLATFORMTHEME", QByteArray());
-    // Fallback for headless environments to avoid platform plugin crashes
-    if (!qEnvironmentVariableIsSet("DISPLAY") && !qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
-        qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
+    // Choose a safe default platform plugin to avoid missing Wayland errors.
+    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
+        if (!qEnvironmentVariableIsSet("DISPLAY")) {
+            // Headless: run offscreen to avoid platform plugin crashes.
+            qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
+        } else {
+            // On X11 desktops (Raspberry Pi default), prefer xcb over Wayland.
+            qputenv("QT_QPA_PLATFORM", QByteArray("xcb"));
+        }
     }
     QApplication app(argc, argv);
 
