@@ -44,6 +44,10 @@ int main() {
         return 1;
     }
 
+    g_p_shm->generated_info.driving_score_type.score_type = SCORE_TYPE_NONE;
+    g_p_shm->generated_info.driving_score_type.count = 0;
+    g_p_shm->given_info.bUseDrivingScoreChecking = 1; // Enable by default
+
     // 3. Initialize Algorithm State
     AlgoState algo_state;
     init_algo_state(&algo_state);
@@ -68,9 +72,6 @@ int main() {
         /* ------------------------------------------------------- */
         if(curr_control_flag) {
             // If control flag is enabled, run the driving score update
-            if(prev_control_flag == 0) {
-                algo_state.is_first_loop = 1; // Reset first loop flag
-            }
             update_driving_score(&g_p_shm->given_info, &g_p_shm->generated_info, &algo_state);
         }
         else {
