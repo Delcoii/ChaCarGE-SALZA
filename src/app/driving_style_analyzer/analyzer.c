@@ -44,9 +44,8 @@ int main() {
         return 1;
     }
 
-    g_p_shm->generated_info.driving_score_type.score_type = SCORE_TYPE_NONE;
-    g_p_shm->generated_info.driving_score_type.count = 0;
-    g_p_shm->given_info.bUseDrivingScoreChecking = 1; // Enable by default
+
+    //g_p_shm->given_info.bUseDrivingScoreChecking = 1; // Enable by default
 
     // 3. Initialize Algorithm State
     AlgoState algo_state;
