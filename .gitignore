@@ -29,3 +29,11 @@ etc/test_data_generator/reader
 
 # Eclipse metadata (if applicable)
 .metadata/
+etc/test_tools/set_traffic_state.c
+resources/userdata/user_data.json
+src/app/infotainment_gui/set_check_flag.cpp
+src/app/infotainment_gui/test_violation_timeline.cpp
+resources/userdata/user_data.json
+etc/test_tools/set_check_state
+etc/test_tools/set_check_state.c
+resources/userdata/user_data.json
