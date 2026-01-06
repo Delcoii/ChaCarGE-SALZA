@@ -31,11 +31,8 @@ void RenderingData::composeFrame(RenderPayload& payload) {
     payload.rawSignSignal = frame.rawData.signSignal;
     payload.rawWarningSignal = frame.warningSignal;
     payload.rawEmotionSignal = frame.emotion;
-    payload.scoreDirection = frame.scoreDirection;
     payload.useDrivingScoreCheckActive = frame.useDrivingScoreCheck;
     payload.violations = frame.violations;
-    payload.sessionStartMs = frame.sessionStartMs;
-    payload.sessionEndMs = frame.sessionEndMs;
 
     payload.signType = toSignType(frame.rawData.signSignal);
     payload.warningType = toWarningType(frame.warningSignal);

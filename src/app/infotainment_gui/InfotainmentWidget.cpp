@@ -20,6 +20,8 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QTimeZone>
+#include <QEvent>
+#include <QMouseEvent>
 #include "UserData.h"
 #include "Common.h"
 
@@ -58,6 +60,8 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     onOffLabel->setAlignment(Qt::AlignCenter);
     onOffLabel->setStyleSheet("padding: 4px 8px; font-size: 12px; font-weight: 800; color: #ffffff; "
                               "background: #d9534f; border-radius: 12px;");
+    onOffLabel->setCursor(Qt::PointingHandCursor);
+    onOffLabel->installEventFilter(this);
     header->addWidget(onOffLabel, 0, Qt::AlignRight | Qt::AlignTop);
     root->addLayout(header);
 
@@ -300,6 +304,21 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
 
 InfotainmentWidget::~InfotainmentWidget() = default;
 
+void InfotainmentWidget::setOnOffToggleHandler(std::function<void()> handler) {
+    onOffToggleHandler = std::move(handler);
+}
+
+bool InfotainmentWidget::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == onOffLabel && event->type() == QEvent::MouseButtonRelease) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (me && me->button() == Qt::LeftButton) {
+            if (onOffToggleHandler) onOffToggleHandler();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) {
     if (signalLabel) {
         const QPixmap* signPix = imageData.getSignImage(payload.signType);
@@ -335,13 +354,11 @@ void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) 
     const int incomingDisplay = static_cast<int>(payload.displayType);
     const bool displayChanged = (incomingDisplay != lastDisplayType);
     if (displayChanged) {
-        // Reset warning/emoji state whenever the view changes so the next payload applies freshly
+        // Reset warning state whenever the view changes so the next payload applies freshly
         warningTimer.invalidate();
-        directionTimer.invalidate();
         warningActive = false;
         activeWarningPixmap = nullptr;
         lastWarningSignal = -1;
-        activeDirection = ScoreDirection::SCORE_NORMAL;
         lastDisplayType = incomingDisplay;
         forceApplyOnNextPayload = true;
     }
@@ -483,7 +500,7 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     if (!happyGif) happyGif = imageData.getEmotionGif(ImageData::EmotionGifType::HAPPY);
     if (!badGif)   badGif   = imageData.getEmotionGif(ImageData::EmotionGifType::BAD_FACE);
 
-    // Track warning changes (score_type) and show paired emoji for a short time, otherwise default clock
+    // Track warning changes (score_type) and show warning GIF for a short time, otherwise default clock
     const bool isSupportedWarning = payload.rawWarningSignal < static_cast<uint8_t>(ScoreType::SCORE_TYPE_NONE);
     const bool shouldActivate = payload.useDrivingScoreCheckActive && isSupportedWarning;
 
@@ -492,21 +509,15 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     forceApplyOnNextPayload = false;
 
     if (shouldActivate && (forceApply || !warningTimer.isValid() || !warningActive)) {
+        // New warning (or reapply) should reset the window and override any existing warning
         lastWarningSignal = static_cast<int>(payload.rawWarningSignal);
         const auto warnType = warningSignFromScore(payload.rawWarningSignal);
         activeWarningPixmap = (warnType != ImageData::SignType::NONE) ? imageData.getSignImage(warnType) : nullptr;
         warningActive = (activeWarningPixmap != nullptr);
         if (warningActive) {
-            warningTimer.restart(); // always restart on apply to preempt prior warning
+            warningTimer.restart(); // start fresh 3s window
         } else {
             warningTimer.invalidate();
-        }
-        const ScoreDirection incoming = static_cast<ScoreDirection>(payload.scoreDirection);
-        if (incoming == ScoreDirection::SCORE_PLUS || incoming == ScoreDirection::SCORE_MINUS) {
-            activeDirection = incoming;
-            directionTimer.restart();
-        } else {
-            activeDirection = ScoreDirection::SCORE_NORMAL;
         }
     }
 
@@ -514,7 +525,6 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     if (warningExpired) {
         warningActive = false;
         activeWarningPixmap = nullptr;
-        activeDirection = ScoreDirection::SCORE_NORMAL;
         lastWarningSignal = -1; // allow re-trigger on the same type after expiry
     }
 
@@ -523,24 +533,20 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         activeWarningPixmap = nullptr;
         warningTimer.invalidate();
         lastWarningSignal = -1;
-        activeDirection = ScoreDirection::SCORE_NORMAL;
     }
 
     const bool emojiWindow =
-        (activeDirection == ScoreDirection::SCORE_PLUS || activeDirection == ScoreDirection::SCORE_MINUS) &&
-        directionTimer.isValid() && directionTimer.elapsed() < directionShowMs &&
-        warningActive;
+        warningActive &&
+        warningTimer.isValid() && warningTimer.elapsed() < warningShowMs;
 
     if (emojiWindow) {
         dateLabel->hide();
         timeLabel->hide();
-        if (activeDirection == ScoreDirection::SCORE_PLUS && happyGif) {
-            setGifMovie(happyGif, gifSizePx);
-        } else if (activeDirection == ScoreDirection::SCORE_MINUS && badGif) {
+        // With only SCORE_PLUS available, use the "bad" emoji for warning flashes
+        if (badGif) {
             setGifMovie(badGif, gifSizePx);
         }
     } else {
-        activeDirection = ScoreDirection::SCORE_NORMAL;
         if (currentGif) {
             currentGif->stop();
             gifLabel->setMovie(nullptr);

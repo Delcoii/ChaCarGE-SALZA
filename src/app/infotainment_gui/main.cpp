@@ -72,6 +72,7 @@ int main(int argc, char* argv[]) {
     });
 
     AppController controller(baseData, renderingData, window);
+    window.setOnOffToggleHandler([&controller]() { controller.requestToggleDrivingCheck(); });
     controller.start();
 
     window.show();

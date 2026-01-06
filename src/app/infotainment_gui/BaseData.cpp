@@ -5,14 +5,11 @@ BaseData::BaseData()
         {0.0, 0.0, 0.0, 0}, // rawData
         0xFF, // warningSignal (invalid sentinel so no warning shows initially)
         0, // emotion
-        0, // scoreDirection
         UserData::getInstance(), // userData reference
         ImageData::getInstance(), // imageData reference
         4,  // curDisplayType (default to dashboard view)
         false, // useDrivingScoreCheck
-        {}, // violations
-        -1, // sessionStartMs
-        -1  // sessionEndMs
+        {} // violations
     }
 {
 }
@@ -30,22 +27,16 @@ BaseData::FrameData BaseData::getFrameDataCopy() const {
 void BaseData::setFrameSignals(const RawData& rawData,
                                uint8_t warningSignal,
                                uint8_t emotion,
-                               uint8_t scoreDirection,
                                uint8_t displayType,
                                bool useDrivingScoreCheck,
-                               std::vector<ViolationEvent> violations,
-                               int64_t sessionStartMs,
-                               int64_t sessionEndMs) {
+                               std::vector<ViolationEvent> violations) {
     std::lock_guard<std::mutex> lock(mtx);
     curFrameData.rawData = rawData;
     curFrameData.warningSignal = warningSignal;
     curFrameData.emotion = emotion;
-    curFrameData.scoreDirection = scoreDirection;
     curFrameData.curDisplayType = displayType;
     curFrameData.useDrivingScoreCheck = useDrivingScoreCheck;
     curFrameData.violations = std::move(violations);
-    curFrameData.sessionStartMs = sessionStartMs;
-    curFrameData.sessionEndMs = sessionEndMs;
 }
 
 uint8_t BaseData::getCurDisplayType() const {

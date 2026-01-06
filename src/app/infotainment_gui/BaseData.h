@@ -34,9 +34,7 @@ public:
 
         // Shared Memory for generated data
         uint8_t warningSignal;
-        
         uint8_t emotion;
-        uint8_t scoreDirection;
 
         // UserData
         UserData& userData;  // user data reference
@@ -48,8 +46,6 @@ public:
         uint8_t curDisplayType;
         bool useDrivingScoreCheck;
         std::vector<ViolationEvent> violations;
-        int64_t sessionStartMs;
-        int64_t sessionEndMs;
     };
 private:
     BaseData();
@@ -67,12 +63,9 @@ public:
     void setFrameSignals(const RawData& rawData,
                          uint8_t warningSignal,
                          uint8_t emotion,
-                         uint8_t scoreDirection,
                          uint8_t displayType,
                          bool useDrivingScoreCheck,
-                         std::vector<ViolationEvent> violations,
-                         int64_t sessionStartMs,
-                         int64_t sessionEndMs);
+                         std::vector<ViolationEvent> violations);
     void setDisplayType(uint8_t displayType);
     uint8_t getCurDisplayType() const;
 
