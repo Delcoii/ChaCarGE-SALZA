@@ -35,7 +35,7 @@
 #define MIN_THROTTLE_FOR_ACCEL      10.0  // minimum throttle to consider as acceleration
 
 // Condition of sudden acceleration
-#define THRESH_THROTTLE_RATE_PPS    500.0  // per second
+#define THRESH_THROTTLE_RATE_PPS    700.0  // per second
 
 /* --- 3. TMAP Segment Config --- */
 #define SEGMENT_DISTANCE_KM         0.05   // 50m Segment
