@@ -322,6 +322,14 @@ void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) 
         onOffLabel->setStyleSheet(on
             ? "padding: 4px 8px; font-size: 12px; font-weight: 800; color: #ffffff; background: #1f8a4d; border-radius: 12px;"
             : "padding: 4px 8px; font-size: 12px; font-weight: 800; color: #ffffff; background: #d9534f; border-radius: 12px;");
+        if (on && !lastUseDrivingScoreActive) {
+            // Freshly turned on -> allow next payload to trigger warnings/emoji
+            lastWarningSignal = -1;
+            warningActive = false;
+            warningTimer.invalidate();
+            forceApplyOnNextPayload = true;
+        }
+        lastUseDrivingScoreActive = on;
     }
 
     const int incomingDisplay = static_cast<int>(payload.displayType);
@@ -476,26 +484,20 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     if (!badGif)   badGif   = imageData.getEmotionGif(ImageData::EmotionGifType::BAD_FACE);
 
     // Track warning changes (score_type) and show paired emoji for a short time, otherwise default clock
-    const bool forceApply = forceApplyOnNextPayload;
-    forceApplyOnNextPayload = false;
-    const bool warningExpired = warningActive && warningTimer.isValid() && warningTimer.elapsed() >= warningShowMs;
-    if (warningExpired) {
-        warningActive = false;
-        activeWarningPixmap = nullptr;
-        activeDirection = ScoreDirection::SCORE_NORMAL;
-    }
+    const bool isSupportedWarning = payload.rawWarningSignal < static_cast<uint8_t>(ScoreType::SCORE_TYPE_NONE);
+    const bool shouldActivate = payload.useDrivingScoreCheckActive && isSupportedWarning;
 
-    const bool isSupportedWarning = payload.rawWarningSignal <= static_cast<uint8_t>(ScoreType::SCORE_OVER_SPEED);
-    const bool shouldActivate =
-        forceApply ||
-        (isSupportedWarning && !warningActive && static_cast<int>(payload.rawWarningSignal) != lastWarningSignal);
-    if (shouldActivate) {
+    const bool newWarningValue = static_cast<int>(payload.rawWarningSignal) != lastWarningSignal;
+    const bool forceApply = forceApplyOnNextPayload || newWarningValue;
+    forceApplyOnNextPayload = false;
+
+    if (shouldActivate && (forceApply || !warningTimer.isValid() || !warningActive)) {
         lastWarningSignal = static_cast<int>(payload.rawWarningSignal);
         const auto warnType = warningSignFromScore(payload.rawWarningSignal);
         activeWarningPixmap = (warnType != ImageData::SignType::NONE) ? imageData.getSignImage(warnType) : nullptr;
-        warningActive = (activeWarningPixmap != nullptr) && payload.useDrivingScoreCheckActive;
+        warningActive = (activeWarningPixmap != nullptr);
         if (warningActive) {
-            warningTimer.restart();
+            warningTimer.restart(); // always restart on apply to preempt prior warning
         } else {
             warningTimer.invalidate();
         }
@@ -506,11 +508,22 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         } else {
             activeDirection = ScoreDirection::SCORE_NORMAL;
         }
-    } else if (!isSupportedWarning || !payload.useDrivingScoreCheckActive) {
+    }
+
+    const bool warningExpired = warningActive && warningTimer.isValid() && warningTimer.elapsed() >= warningShowMs;
+    if (warningExpired) {
+        warningActive = false;
+        activeWarningPixmap = nullptr;
+        activeDirection = ScoreDirection::SCORE_NORMAL;
+        lastWarningSignal = -1; // allow re-trigger on the same type after expiry
+    }
+
+    if (!payload.useDrivingScoreCheckActive) {
         warningActive = false;
         activeWarningPixmap = nullptr;
         warningTimer.invalidate();
         lastWarningSignal = -1;
+        activeDirection = ScoreDirection::SCORE_NORMAL;
     }
 
     const bool emojiWindow =
@@ -697,8 +710,11 @@ void InfotainmentWidget::applyHistoryView(const RenderingData::RenderPayload& pa
     std::sort(events.begin(), events.end(), [](const auto& a, const auto& b) {
         return a.timestampMs < b.timestampMs;
     });
-    const int64_t startMs = events.front().timestampMs;
-    const int64_t endMs = events.back().timestampMs;
+    int64_t startMs = payload.sessionStartMs >= 0 ? payload.sessionStartMs : events.front().timestampMs;
+    int64_t endMs = payload.sessionEndMs >= 0 ? payload.sessionEndMs : events.back().timestampMs;
+    if (endMs < startMs) {
+        endMs = startMs;
+    }
     const int64_t duration = std::max<int64_t>(1, endMs - startMs);
 
     const int marginLeft = 90;
@@ -748,7 +764,7 @@ void InfotainmentWidget::applyHistoryView(const RenderingData::RenderPayload& pa
 
     // Place icons
     for (const auto& ev : events) {
-        const double tRatio = static_cast<double>(ev.timestampMs - startMs) / duration;
+        const double tRatio = std::clamp(static_cast<double>(ev.timestampMs - startMs) / duration, 0.0, 1.0);
         const double x = marginLeft + timelineWidth * tRatio;
         int laneIdx = -1;
         for (int r = 0; r < rowCount; ++r) {
