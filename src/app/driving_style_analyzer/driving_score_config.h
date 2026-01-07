@@ -46,7 +46,8 @@
 #define MAX_WINDOW_SIZE             10
 #define LPF_ALPHA                   0.1
 
-// Cooldown for Bump Detection
-#define BUMP_COOLDOWN_TICKS         50    // 50 ticks (0.5s)
+// Cooldown for Event Detection
+#define EVENT_COOLDOWN_TICKS         100    // 50 ticks (0.5s)
+#define SUDDEN_EVENT_COOLDOWN_TICKS    500   // 100 ticks (1s)
 
 #endif // DRIVING_SCORE_CONFIG_H

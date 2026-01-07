@@ -52,6 +52,7 @@ static double calculate_tesla_score(const ScoreSegment* seg) {
 
 // [Main Logic] Update Driving Score & Detect Events
 void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, AlgoState* state) {
+    state->event_detected = 0; // Reset event flag at the beginning of the cycle
     
     // 1. Calculate Mileage (Delta Distance)
     double current_dist = input->drive_distance.data_km;
@@ -70,9 +71,13 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
         state->prev_traffic_state = traffic;
         state->prev_throttle = throttle;
 
-        state->is_continuous_event_active = 0;
+        // Initialize cooldown timers
         state->bump_cooldown_ticks = 0;
+        state->signal_cooldown_ticks = 0;
+        state->sudden_curve_cooldown_ticks = 0;
+        state->sudden_accel_cooldown_ticks = 0;
 
+        // Initialize bias
         state->bias_acc_z = raw_acc_z; // Calibrate bias
         state->prev_acc_z = state->bias_acc_z;
 
@@ -122,25 +127,36 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     // dt = 0.01s (10ms)
     double throttle_rate = (throttle - state->prev_throttle) / 0.01;
 
-    // [C] Bump Cooldown Timer
+    // [C] Event Cooldown Timers
     if(state->bump_cooldown_ticks > 0) {
         state->bump_cooldown_ticks--;
+    }
+    if(state->signal_cooldown_ticks > 0) {
+        state->signal_cooldown_ticks--;
+    }
+    if(state->sudden_curve_cooldown_ticks > 0) {
+        state->sudden_curve_cooldown_ticks--;
+    }
+    if(state->sudden_accel_cooldown_ticks > 0) {
+        state->sudden_accel_cooldown_ticks--;
     }
 
     // 4. Detect Risky Behaviors & Update 'score_type'
     // Priority: Signal Violation > Sudden Curve > Sudden Accel/Brake > None
     // We check in reverse order of priority or use else-if carefully.
     
-
     output->driving_score_type.score_type = SCORE_TYPE_NONE; // Reset first
     output->driving_score_type.count = 0;
 
     // (A) Signal Violation (Highest Priority)
-    if (state->prev_traffic_state == TRAFFIC_STATE_RED && traffic == TRAFFIC_STATE_NONE && state->prev_throttle > 50.0) {
-        curr_seg->signal_violation_ticks++;
-        output->driving_score_type.count = ++state->signal_violation_count;
-        output->driving_score_type.score_type = SCORE_IGNORE_SIGN;
-        state->event_detected = 1;
+    if(!state->signal_cooldown_ticks) {
+        if (state->prev_traffic_state == TRAFFIC_STATE_RED && traffic == TRAFFIC_STATE_NONE && state->prev_throttle > 70.0) {
+            curr_seg->signal_violation_ticks++;
+            output->driving_score_type.count = ++state->signal_violation_count;
+            output->driving_score_type.score_type = SCORE_IGNORE_SIGN;
+            state->event_detected = 1;
+            state->signal_cooldown_ticks = SUDDEN_EVENT_COOLDOWN_TICKS; // Set cooldown
+        }
     }
 
     /*Countinuos Events Check*/
@@ -151,33 +167,31 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     if (!state->event_detected) {
         // (B) Sudden Curve (If no higher priority event)
         if(is_turning || is_accel/* || is_brake*/) {
-            if(!state->is_continuous_event_active) {
-                if(is_turning) {
-                    curr_seg->aggressive_turn_ticks++;
-                    output->driving_score_type.count = ++state->sudden_curve_count;
-                    output->driving_score_type.score_type = SCORE_SUDDEN_CURVE;
-                }
         
-            // (C) Sudden Accel (Mapped to Sudden Accel Type)    
-                else {
-                    curr_seg->sudden_accel_ticks++;
-                    output->driving_score_type.count = ++state->sudden_accel_count;
-                    output->driving_score_type.score_type = SCORE_SUDDEN_ACCEL; 
-                }
+            if(is_turning && !state->sudden_curve_cooldown_ticks) {
+                curr_seg->aggressive_turn_ticks++;
+                output->driving_score_type.count = ++state->sudden_curve_count;
+                output->driving_score_type.score_type = SCORE_SUDDEN_CURVE;
+                state->sudden_curve_cooldown_ticks = SUDDEN_EVENT_COOLDOWN_TICKS; // Set cooldown
             }
-            state->is_continuous_event_active = 1; // Set flag
-        }
-        // (D) Speed Bump Detection (If no higher priority event)
+    
+            // (C) Sudden Accel (Mapped to Sudden Accel Type)    
+            else if(is_accel && !state->sudden_accel_cooldown_ticks) {
+                curr_seg->sudden_accel_ticks++;
+                output->driving_score_type.count = ++state->sudden_accel_count;
+                output->driving_score_type.score_type = SCORE_SUDDEN_ACCEL; 
+                state->sudden_accel_cooldown_ticks = SUDDEN_EVENT_COOLDOWN_TICKS; // Set cooldown
+            }
+                    
+        }        // (D) Speed Bump Detection (If no higher priority event)
         // Note: Bump detection is independent of continuous events
         else {
-            state->is_continuous_event_active = 0; // Reset flag
-
             if(state->bump_cooldown_ticks == 0 && (filtered_acc_z) >= (-2.0) ) {
                 curr_seg->bump_ticks++;
                 output->driving_score_type.score_type = SCORE_BUMP;
                 output->driving_score_type.count = ++state->bump_count;
                 
-                state->bump_cooldown_ticks = BUMP_COOLDOWN_TICKS; // Set cooldown
+                state->bump_cooldown_ticks = EVENT_COOLDOWN_TICKS; // Set cooldown
             }
 
            // All checks done for continuous events
@@ -206,10 +220,6 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
         // Reset next segment
         memset(&state->history[state->current_seg_idx], 0, sizeof(ScoreSegment));
         state->history[state->current_seg_idx].score = 100.0;
-
-        // Reset continuous event flag
-        // Note: events in progress are must be maintained or reset neither segment change or not.
-        state->is_continuous_event_active = 0;
     }
 
     // 7. Update 'total_score' (The Final Output)
