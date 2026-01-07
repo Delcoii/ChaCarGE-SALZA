@@ -48,6 +48,7 @@ def can_process():
             recv_ts = time.time()
 
             traffic_sign_state = struct.unpack("i", msg)[0]
+            print("Sign state = ", traffic_sign_state)
             state_str = STATE_STR.get(traffic_sign_state, "UNKNOWN")
 
             # print(
