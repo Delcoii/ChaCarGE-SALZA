@@ -54,7 +54,9 @@ typedef struct {
     uint8_t prev_traffic_state;
 
     // State Variables for avoiding repeated event detection
-    uint8_t is_continuous_event_active;     // flag for sudden curve/accel
+    uint16_t signal_cooldown_ticks;         // cooldown timer for signal violation events
+    uint16_t sudden_curve_cooldown_ticks;   // cooldown timer for sudden curve events
+    uint16_t sudden_accel_cooldown_ticks;   // cooldown timer for sudden accel events
     uint16_t bump_cooldown_ticks;           // cooldown timer for bump events
 } AlgoState;
 
