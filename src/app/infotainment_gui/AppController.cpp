@@ -11,6 +11,8 @@
 #include <iostream>
 #include <limits>
 
+#include "struct_traffic_sign.h"
+
 AppController::AppController(BaseData& base, RenderingData& rendering, InfotainmentWidget& uiWidget)
     : baseData(base), renderingData(rendering), ui(uiWidget) {}
 
@@ -253,6 +255,12 @@ void AppController::producerLoop() {
         uint8_t nextDisplay = curFrame.curDisplayType;
         if (useCheckStopped && !activeViolations.empty()) {
             nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::History);
+        }
+        if (rawData.throttle >= 1.0) {
+            nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::Dashboard);
+        }
+        if (rawData.signSignal == static_cast<uint8_t>(TRAFFIC_STATE_GREEN)) {
+            nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::Dashboard);
         }
         std::vector<BaseData::ViolationEvent> violationsForFrame;
         if (useCheckStopped) {

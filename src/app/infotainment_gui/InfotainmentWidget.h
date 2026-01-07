@@ -25,6 +25,7 @@ public:
 
 private:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
     QLabel* createImageLabel(int minW, int minH);
     void setPixmapToLabel(QLabel* label, const QPixmap* pix, int w, int h, const char* fallback);
     void applyImages(const RenderingData::RenderPayload& payload);
@@ -35,6 +36,7 @@ private:
     void updateDiamondGauge(uint16_t score);
     void setGifMovie(QMovie* movie, int size);
     const QPixmap* violationPixmap(uint8_t scoreType) const;
+    void flashThrottleBlocked();
 
 private:
     const QPixmap* tierPix = nullptr;
@@ -97,6 +99,10 @@ private:
     QWidget* gaugeContainer = nullptr;
     class QHBoxLayout* gaugeRow = nullptr;
     const QPixmap* steeringWheelPix = nullptr;
+    QLabel* throttleBlockOverlay = nullptr;
+    QTimer* throttleFlashTimer = nullptr;
+    int throttleFlashTicksLeft = 0;
+    double lastThrottle = 0.0;
 };
 
 #endif // INFOTAINMENT_WIDGET_H
