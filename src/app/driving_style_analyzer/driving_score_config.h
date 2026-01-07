@@ -40,7 +40,7 @@
 /* --- 3. TMAP Segment Config --- */
 #define SEGMENT_DISTANCE_KM         0.05   // 50m Segment
 #define MAX_SEGMENT_HISTORY         6
-#define SEGMENT_TIMEOUT_TICKS       6000   // 6000 ticks = 60s timeout
+#define SEGMENT_TIMEOUT_TICKS       15000   // 6000 ticks = 60s timeout
 
 /* size of Moving Window */
 #define MAX_WINDOW_SIZE             10
