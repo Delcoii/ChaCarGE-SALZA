@@ -83,10 +83,13 @@ def inference_process(shm_name):
     # =========================
     session = ort.InferenceSession(
         "best_480.onnx",
-        # "best_480_int8.onnx",
+        # "low_mos.onnx",
         providers=["CPUExecutionProvider"]
     )
     input_name = session.get_inputs()[0].name
+
+    # Create a named window with WINDOW_NORMAL to allow resizing
+    cv2.namedWindow("Detection Result", cv2.WINDOW_NORMAL)
 
     while True:
         # Copy frame from shared memory
