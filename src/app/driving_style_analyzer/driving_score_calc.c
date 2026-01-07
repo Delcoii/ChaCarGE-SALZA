@@ -150,7 +150,7 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
 
     // (A) Signal Violation (Highest Priority)
     if(!state->signal_cooldown_ticks) {
-        if (state->prev_traffic_state == TRAFFIC_STATE_RED && traffic == TRAFFIC_STATE_NONE && state->prev_throttle > 70.0) {
+        if (state->prev_traffic_state == TRAFFIC_STATE_RED && traffic == TRAFFIC_STATE_NONE && state->prev_throttle > 50.0) {
             curr_seg->signal_violation_ticks++;
             output->driving_score_type.count = ++state->signal_violation_count;
             output->driving_score_type.score_type = SCORE_IGNORE_SIGN;
