@@ -40,7 +40,7 @@ COLOR_MAP = {
 }
 
 # Confidence threshold for valid detection
-CONF_TH = 0.50
+CONF_TH = 0.75
 
 def preprocess(img):
     # Resize input image to model input size
