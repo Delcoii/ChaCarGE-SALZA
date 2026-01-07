@@ -50,6 +50,26 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     signalLabel->raise();
     signalLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
+    // Full-screen overlay used to warn when throttling blocks page changes.
+    throttleBlockOverlay = new QLabel(this);
+    throttleBlockOverlay->setAlignment(Qt::AlignCenter);
+    throttleBlockOverlay->setStyleSheet("background: rgba(200, 0, 0, 90);");
+    throttleBlockOverlay->setText("");
+    throttleBlockOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    throttleBlockOverlay->hide();
+    throttleFlashTimer = new QTimer(this);
+    throttleFlashTimer->setInterval(200);
+    connect(throttleFlashTimer, &QTimer::timeout, this, [this]() {
+        if (!throttleBlockOverlay) return;
+        if (throttleFlashTicksLeft <= 0) {
+            throttleFlashTimer->stop();
+            throttleBlockOverlay->hide();
+            return;
+        }
+        throttleBlockOverlay->setVisible(!throttleBlockOverlay->isVisible());
+        throttleFlashTicksLeft--;
+    });
+
     auto* header = new QHBoxLayout();
     header->setContentsMargins(8, 8, 12, 0); // offset on/off badge from the extreme corner
     header->setSpacing(0);
@@ -222,8 +242,9 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     toggleBtn->setFixedSize(160, 60);
     toggleBtn->setStyleSheet(
         "QPushButton { background: #5dd1ff; color: #0f1115; font-weight: 700; font-size: 18px; padding: 10px 14px; border-radius: 10px; }"
-        "QPushButton:hover { background: #7de0ff; color: #0b0d11; transform: translateY(-1px); }"
+        "QPushButton:hover { background: #7de0ff; color: #0b0d11; }"
         "QPushButton:pressed { background: #3fc3f0; color: #0b0d11; }"
+        "QPushButton:disabled { background: #c8c8c8; color: #666666; }"
     );
     connect(toggleBtn, &QPushButton::clicked, this, &InfotainmentWidget::toggleDisplayType);
     bottomBar->addWidget(toggleBtn, 0, Qt::AlignBottom | Qt::AlignRight);
@@ -325,7 +346,30 @@ bool InfotainmentWidget::eventFilter(QObject* watched, QEvent* event) {
     return QWidget::eventFilter(watched, event);
 }
 
+void InfotainmentWidget::mousePressEvent(QMouseEvent* event) {
+    if (toggleBtn && lastThrottle >= 1.0) {
+        const QPoint pos = event->position().toPoint();
+        if (toggleBtn->geometry().contains(pos)) {
+            flashThrottleBlocked();
+            event->accept();
+            return;
+        }
+    }
+    QWidget::mousePressEvent(event);
+}
+
 void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) {
+    if (!stack || !mainContainer) {
+        return;
+    }
+    lastThrottle = payload.throttle;
+    if (toggleBtn) {
+        toggleBtn->setEnabled(lastThrottle < 1.0);
+    }
+    if (throttleBlockOverlay && throttleBlockOverlay->isVisible()) {
+        throttleBlockOverlay->setGeometry(rect());
+        throttleBlockOverlay->raise();
+    }
     if (signalLabel) {
         const QPixmap* signPix = imageData.getSignImage(payload.signType);
         if (!signPix) signPix = imageData.getSignImage(ImageData::SignType::NONE);
@@ -383,17 +427,22 @@ void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) 
 
     tierPix = payload.tierImage;
 
-    if (payload.displayType == RenderingData::DisplayType::ScoreBoard) {
-        stack->setCurrentWidget(scoreContainer);
+    QWidget* target = mainContainer;
+    if (payload.displayType == RenderingData::DisplayType::ScoreBoard && scoreContainer) {
+        target = scoreContainer;
+    } else if (payload.displayType == RenderingData::DisplayType::History && historyContainer) {
+        target = historyContainer;
+    } else if (payload.displayType == RenderingData::DisplayType::Emotion && detailContainer) {
+        target = detailContainer;
+    }
+    stack->setCurrentWidget(target);
+    if (target == scoreContainer) {
         applyScoreView(payload);
-    } else if (payload.displayType == RenderingData::DisplayType::History) {
-        stack->setCurrentWidget(historyContainer);
+    } else if (target == historyContainer) {
         applyHistoryView(payload);
-    } else if (payload.displayType == RenderingData::DisplayType::Emotion) {
-        stack->setCurrentWidget(detailContainer);
+    } else if (target == detailContainer) {
         applyDetailView(payload);
     } else {
-        stack->setCurrentWidget(mainContainer);
         applyImages(payload);
     }
 }
@@ -809,6 +858,10 @@ void InfotainmentWidget::applyHistoryView(const RenderingData::RenderPayload& pa
 }
 
 void InfotainmentWidget::toggleDisplayType() {
+    if (lastThrottle >= 1.0) {
+        flashThrottleBlocked();
+        return;
+    }
     auto frame = baseData.getFrameDataCopy();
     uint8_t nextDisplay;
     if (frame.curDisplayType == static_cast<uint8_t>(RenderingData::DisplayType::Dashboard)) {
@@ -823,6 +876,17 @@ void InfotainmentWidget::toggleDisplayType() {
     baseData.setDisplayType(nextDisplay);
     // Immediate UI refresh to reflect the new mode without waiting on the renderer loop
     showFrame(renderingData.composeFrame());
+}
+
+void InfotainmentWidget::flashThrottleBlocked() {
+    if (!throttleBlockOverlay || !throttleFlashTimer) return;
+    throttleBlockOverlay->setGeometry(rect());
+    throttleBlockOverlay->raise();
+    throttleBlockOverlay->show();
+    throttleFlashTicksLeft = 10; // 2s @ 200ms
+    if (!throttleFlashTimer->isActive()) {
+        throttleFlashTimer->start();
+    }
 }
 
 void InfotainmentWidget::updateDiamondGauge(uint16_t score) {

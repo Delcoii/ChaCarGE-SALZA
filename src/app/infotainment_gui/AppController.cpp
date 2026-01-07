@@ -256,6 +256,9 @@ void AppController::producerLoop() {
         if (useCheckStopped && !activeViolations.empty()) {
             nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::History);
         }
+        if (rawData.throttle >= 1.0) {
+            nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::Dashboard);
+        }
         if (rawData.signSignal == static_cast<uint8_t>(TRAFFIC_STATE_GREEN)) {
             nextDisplay = static_cast<uint8_t>(RenderingData::DisplayType::Dashboard);
         }
