@@ -678,7 +678,7 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
 }
 
 void InfotainmentWidget::applyScoreView(const RenderingData::RenderPayload& payload) {
-    scoreValueLabel->setText(QString::number(payload.userTotalScore) + " 점");
+    scoreValueLabel->setText(QString::number(payload.userTotalScore));
 
     const int tierSize = std::max(200, std::min(width(), height()) / 2 - 40);
     if (tierPix) {
