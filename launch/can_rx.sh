@@ -2,7 +2,7 @@
 
 # Determine paths relative to this script
 SCRIPT_DIR=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-ROOT_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
+ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 BIN="$ROOT_DIR/src/bsw/ipc/src/can_rx_process/can_rx_process"
 
 # Load aliases/functions from bashrc so canstart alias is available
