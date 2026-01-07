@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QElapsedTimer>
 #include <vector>
+#include <functional>
 #include "RenderingData.h"
 #include "ImageData.h"
 #include "ShmCompat.h"
@@ -20,8 +21,10 @@ public:
     explicit InfotainmentWidget(ImageData& images, BaseData& base, RenderingData& rendering, QWidget* parent = nullptr);
     ~InfotainmentWidget() override;
     void showFrame(const RenderingData::RenderPayload& payload);
+    void setOnOffToggleHandler(std::function<void()> handler);
 
 private:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     QLabel* createImageLabel(int minW, int minH);
     void setPixmapToLabel(QLabel* label, const QPixmap* pix, int w, int h, const char* fallback);
     void applyImages(const RenderingData::RenderPayload& payload);
@@ -39,6 +42,7 @@ private:
     ImageData& imageData;
     BaseData& baseData;
     RenderingData& renderingData;
+    std::function<void()> onOffToggleHandler;
 
     QWidget* mainContainer = nullptr;
     QWidget* scoreContainer = nullptr;
@@ -74,12 +78,10 @@ private:
     QMovie* happyGif = nullptr;
     QMovie* badGif = nullptr;
     QMovie* currentGif = nullptr;
-    ScoreDirection activeDirection = ScoreDirection::SCORE_NORMAL;
-    QElapsedTimer directionTimer;
-    int directionShowMs = 3000;
     QElapsedTimer warningTimer;
     int warningShowMs = 3000;
     int lastWarningSignal = -1;
+    bool lastUseDrivingScoreActive = false;
     bool warningActive = false;
     const QPixmap* activeWarningPixmap = nullptr;
     int lastDisplayType = -1;

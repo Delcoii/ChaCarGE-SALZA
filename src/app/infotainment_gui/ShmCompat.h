@@ -2,8 +2,9 @@
 #define SHM_COMPAT_H
 
 #include <stdint.h>
+#include "../../bsw/ipc/inc/shm_layout.h"
 
-// Provide scoped ScoreType to avoid clashes with the unscoped BSW constants.
+// Scoped ScoreType to use in C++ code (mirrors struct_driving_score_type.h)
 enum class ScoreType : uint16_t {
     SCORE_BUMP = 0,
     SCORE_SUDDEN_ACCEL,
@@ -13,14 +14,6 @@ enum class ScoreType : uint16_t {
     SCORE_OVER_SPEED,
     SCORE_TYPE_NONE
 };
-
-enum ScoreDirection {
-    SCORE_NORMAL = 0,
-    SCORE_PLUS = 1,
-    SCORE_MINUS = 2,
-};
-
-#include "../../bsw/ipc/inc/shm_layout.h"
 
 #ifdef __cplusplus
 extern "C" {

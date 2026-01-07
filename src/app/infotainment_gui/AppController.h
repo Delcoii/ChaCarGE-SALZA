@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <array>
+#include <chrono>
 #include <thread>
 #include <vector>
 #include <QString>
@@ -21,6 +22,7 @@ public:
     void start();
     void stop();
     void join();
+    void requestToggleDrivingCheck();
 
     static void loadAssets(ImageData& imageData, const QString& assetBasePath);
 
@@ -41,9 +43,19 @@ private:
     std::thread rendererThread;
     std::atomic<bool> running{false};
     ShmIntegrated* shmPtr = nullptr;
+    std::atomic<int> pendingToggle{0};
     bool lastUseDrivingCheck = false;
+    uint16_t lastRawScoreType = 0xFFFF; // track changes while driving score check is on
+    uint16_t lastEmittedType = 0xFFFF;
+    uint16_t lastEmittedCount = 0;
+    uint16_t activeWarningType = 0xFFFF;
+    uint16_t activeWarningCount = 0;
+    std::chrono::steady_clock::time_point warningExpiry{};
+    int64_t sessionStartMs = -1;
+    int64_t sessionEndMs = -1;
     std::vector<BaseData::ViolationEvent> activeViolations;
     std::array<uint16_t, static_cast<size_t>(ScoreType::SCORE_TYPE_NONE) + 1> lastScoreCounts{};
+    std::array<uint16_t, static_cast<size_t>(ScoreType::SCORE_TYPE_NONE) + 1> typeChangeCounts{};
 
     static constexpr int kRenderBufferCount = 3;
     std::array<RenderingData::RenderPayload, kRenderBufferCount> renderBuffers{};

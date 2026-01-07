@@ -20,6 +20,8 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QTimeZone>
+#include <QEvent>
+#include <QMouseEvent>
 #include "UserData.h"
 #include "Common.h"
 
@@ -54,10 +56,13 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     header->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     header->addStretch();
     onOffLabel = new QLabel("OFF", this);
-    onOffLabel->setFixedHeight(24);
+    onOffLabel->setFixedHeight(48);
+    onOffLabel->setFixedWidth(96);
     onOffLabel->setAlignment(Qt::AlignCenter);
-    onOffLabel->setStyleSheet("padding: 4px 8px; font-size: 12px; font-weight: 800; color: #ffffff; "
+    onOffLabel->setStyleSheet("padding: 4px 8px; font-size: 80px; font-weight: 800; color: #ffffff; "
                               "background: #d9534f; border-radius: 12px;");
+    onOffLabel->setCursor(Qt::PointingHandCursor);
+    onOffLabel->installEventFilter(this);
     header->addWidget(onOffLabel, 0, Qt::AlignRight | Qt::AlignTop);
     root->addLayout(header);
 
@@ -125,7 +130,8 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     centerDivider = new QFrame(this);
     centerDivider->setFrameShape(QFrame::VLine);
     centerDivider->setFrameShadow(QFrame::Plain);
-    centerDivider->setStyleSheet("color: #2a2f3a; background: #2a2f3a;");
+    centerDivider->setFixedHeight(200);
+    centerDivider->setStyleSheet("color: #42465228; background: #2e333d28;");
     contentRow->addWidget(centerDivider, 0, Qt::AlignVCenter);
 
     warningLabel = createImageLabel(200, 200);
@@ -207,14 +213,15 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
     gaugeRow->addStretch();
 
     auto* bottomBar = new QHBoxLayout();
-    bottomBar->setContentsMargins(0, 0, 0, 0);
+    bottomBar->setContentsMargins(0, 0, 10, 10);
     bottomBar->setSpacing(12);
     bottomBar->addWidget(gaugeContainer, 1, Qt::AlignBottom | Qt::AlignLeft);
 
     // Toggle button (bottom-right)
-    toggleBtn = new QPushButton("Toggle View", this);
+    toggleBtn = new QPushButton("Next Page", this);
+    toggleBtn->setFixedSize(160, 60);
     toggleBtn->setStyleSheet(
-        "QPushButton { background: #5dd1ff; color: #0f1115; font-weight: 700; padding: 10px 14px; border-radius: 10px; }"
+        "QPushButton { background: #5dd1ff; color: #0f1115; font-weight: 700; font-size: 18px; padding: 10px 14px; border-radius: 10px; }"
         "QPushButton:hover { background: #7de0ff; color: #0b0d11; transform: translateY(-1px); }"
         "QPushButton:pressed { background: #3fc3f0; color: #0b0d11; }"
     );
@@ -250,15 +257,18 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
         auto* row = new QHBoxLayout();
         row->setSpacing(12);
         auto* name = new QLabel(this);
-        name->setStyleSheet("font-size: 42px; color: #cfd2d8;");
+        name->setStyleSheet("font-size: 28px; color: #000000;");
+        name->setFixedWidth(260);
         auto* bar = new QProgressBar(this);
         bar->setRange(0, 100);
         bar->setTextVisible(false);
         bar->setFixedHeight(16);
-        bar->setStyleSheet("QProgressBar { background: #1e222b; border-radius: 8px; }"
-                           "QProgressBar::chunk { background: #5dd1ff; border-radius: 8px; }");
+        bar->setStyleSheet("QProgressBar { background: transparent; border: 0; }"
+                           "QProgressBar::chunk { background: #e74c3c; border-radius: 8px; }");
         auto* val = new QLabel(this);
         val->setStyleSheet("font-size: 14px; color: #111111;");
+        val->setMinimumWidth(80);
+        val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         row->addWidget(name, 1);
         row->addWidget(bar, 3);
         row->addWidget(val, 0, Qt::AlignRight);
@@ -300,11 +310,26 @@ InfotainmentWidget::InfotainmentWidget(ImageData& images, BaseData& base, Render
 
 InfotainmentWidget::~InfotainmentWidget() = default;
 
+void InfotainmentWidget::setOnOffToggleHandler(std::function<void()> handler) {
+    onOffToggleHandler = std::move(handler);
+}
+
+bool InfotainmentWidget::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == onOffLabel && event->type() == QEvent::MouseButtonRelease) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (me && me->button() == Qt::LeftButton) {
+            if (onOffToggleHandler) onOffToggleHandler();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) {
     if (signalLabel) {
         const QPixmap* signPix = imageData.getSignImage(payload.signType);
         if (!signPix) signPix = imageData.getSignImage(ImageData::SignType::NONE);
-        const int target = std::max(120, static_cast<int>(height() * 0.16)); // desired size
+        const int target = std::max(260, static_cast<int>(height() * 0.16)); // desired size
         signalLabel->setFixedSize(target, target);
         if (signPix) {
             QPixmap scaled = signPix->scaled(target, target, Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -312,7 +337,7 @@ void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) 
         } else {
             signalLabel->clear();
         }
-        signalLabel->move(8, 8); // slight offset down so it sits just above nearby UI
+        signalLabel->move(0, 8); // slight offset down so it sits just above nearby UI
         signalLabel->raise();
         signalLabel->show();
     }
@@ -320,20 +345,26 @@ void InfotainmentWidget::showFrame(const RenderingData::RenderPayload& payload) 
         const bool on = payload.useDrivingScoreCheckActive;
         onOffLabel->setText(on ? "ON" : "OFF");
         onOffLabel->setStyleSheet(on
-            ? "padding: 4px 8px; font-size: 12px; font-weight: 800; color: #ffffff; background: #1f8a4d; border-radius: 12px;"
-            : "padding: 4px 8px; font-size: 12px; font-weight: 800; color: #ffffff; background: #d9534f; border-radius: 12px;");
+            ? "padding: 4px 8px; font-size: 20px; font-weight: 800; color: #ffffff; background: #1f8a4d; border-radius: 12px;"
+            : "padding: 4px 8px; font-size: 20px; font-weight: 800; color: #ffffff; background: #d9534f; border-radius: 12px;");
+        if (on && !lastUseDrivingScoreActive) {
+            // Freshly turned on -> allow next payload to trigger warnings/emoji
+            lastWarningSignal = -1;
+            warningActive = false;
+            warningTimer.invalidate();
+            forceApplyOnNextPayload = true;
+        }
+        lastUseDrivingScoreActive = on;
     }
 
     const int incomingDisplay = static_cast<int>(payload.displayType);
     const bool displayChanged = (incomingDisplay != lastDisplayType);
     if (displayChanged) {
-        // Reset warning/emoji state whenever the view changes so the next payload applies freshly
+        // Reset warning state whenever the view changes so the next payload applies freshly
         warningTimer.invalidate();
-        directionTimer.invalidate();
         warningActive = false;
         activeWarningPixmap = nullptr;
         lastWarningSignal = -1;
-        activeDirection = ScoreDirection::SCORE_NORMAL;
         lastDisplayType = incomingDisplay;
         forceApplyOnNextPayload = true;
     }
@@ -468,45 +499,40 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     gifSizePx = gifSize;                                      // keep stable target
     gifLabel->setMinimumSize(centerW, centerH);
     gifLabel->setMaximumSize(centerW, centerH);
-    if (centerDivider) {
-        centerDivider->setFixedHeight(centerH);
-    }
+    
     // cache movies
     if (!happyGif) happyGif = imageData.getEmotionGif(ImageData::EmotionGifType::HAPPY);
     if (!badGif)   badGif   = imageData.getEmotionGif(ImageData::EmotionGifType::BAD_FACE);
 
-    // Track warning changes (score_type) and show paired emoji for a short time, otherwise default clock
-    const bool forceApply = forceApplyOnNextPayload;
+    // Track warning changes (score_type) and show warning GIF for a short time, otherwise default clock
+    const bool isSupportedWarning = payload.rawWarningSignal < static_cast<uint8_t>(ScoreType::SCORE_TYPE_NONE);
+    const bool shouldActivate = payload.useDrivingScoreCheckActive && isSupportedWarning;
+
+    const bool newWarningValue = static_cast<int>(payload.rawWarningSignal) != lastWarningSignal;
+    const bool forceApply = forceApplyOnNextPayload || newWarningValue;
     forceApplyOnNextPayload = false;
+
+    if (shouldActivate && (forceApply || !warningTimer.isValid() || !warningActive)) {
+        // New warning (or reapply) should reset the window and override any existing warning
+        lastWarningSignal = static_cast<int>(payload.rawWarningSignal);
+        const auto warnType = warningSignFromScore(payload.rawWarningSignal);
+        activeWarningPixmap = (warnType != ImageData::SignType::NONE) ? imageData.getSignImage(warnType) : nullptr;
+        warningActive = (activeWarningPixmap != nullptr);
+        if (warningActive) {
+            warningTimer.restart(); // start fresh 3s window
+        } else {
+            warningTimer.invalidate();
+        }
+    }
+
     const bool warningExpired = warningActive && warningTimer.isValid() && warningTimer.elapsed() >= warningShowMs;
     if (warningExpired) {
         warningActive = false;
         activeWarningPixmap = nullptr;
-        activeDirection = ScoreDirection::SCORE_NORMAL;
+        lastWarningSignal = -1; // allow re-trigger on the same type after expiry
     }
 
-    const bool isSupportedWarning = payload.rawWarningSignal <= static_cast<uint8_t>(ScoreType::SCORE_OVER_SPEED);
-    const bool shouldActivate =
-        forceApply ||
-        (isSupportedWarning && !warningActive && static_cast<int>(payload.rawWarningSignal) != lastWarningSignal);
-    if (shouldActivate) {
-        lastWarningSignal = static_cast<int>(payload.rawWarningSignal);
-        const auto warnType = warningSignFromScore(payload.rawWarningSignal);
-        activeWarningPixmap = (warnType != ImageData::SignType::NONE) ? imageData.getSignImage(warnType) : nullptr;
-        warningActive = (activeWarningPixmap != nullptr) && payload.useDrivingScoreCheckActive;
-        if (warningActive) {
-            warningTimer.restart();
-        } else {
-            warningTimer.invalidate();
-        }
-        const ScoreDirection incoming = static_cast<ScoreDirection>(payload.scoreDirection);
-        if (incoming == ScoreDirection::SCORE_PLUS || incoming == ScoreDirection::SCORE_MINUS) {
-            activeDirection = incoming;
-            directionTimer.restart();
-        } else {
-            activeDirection = ScoreDirection::SCORE_NORMAL;
-        }
-    } else if (!isSupportedWarning || !payload.useDrivingScoreCheckActive) {
+    if (!payload.useDrivingScoreCheckActive) {
         warningActive = false;
         activeWarningPixmap = nullptr;
         warningTimer.invalidate();
@@ -514,20 +540,17 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
     }
 
     const bool emojiWindow =
-        (activeDirection == ScoreDirection::SCORE_PLUS || activeDirection == ScoreDirection::SCORE_MINUS) &&
-        directionTimer.isValid() && directionTimer.elapsed() < directionShowMs &&
-        warningActive;
+        warningActive &&
+        warningTimer.isValid() && warningTimer.elapsed() < warningShowMs;
 
     if (emojiWindow) {
         dateLabel->hide();
         timeLabel->hide();
-        if (activeDirection == ScoreDirection::SCORE_PLUS && happyGif) {
-            setGifMovie(happyGif, gifSizePx);
-        } else if (activeDirection == ScoreDirection::SCORE_MINUS && badGif) {
+        // With only SCORE_PLUS available, use the "bad" emoji for warning flashes
+        if (badGif) {
             setGifMovie(badGif, gifSizePx);
         }
     } else {
-        activeDirection = ScoreDirection::SCORE_NORMAL;
         if (currentGif) {
             currentGif->stop();
             gifLabel->setMovie(nullptr);
@@ -626,13 +649,20 @@ void InfotainmentWidget::applyImages(const RenderingData::RenderPayload& payload
         if (src) {
             const double clamped = std::clamp(payload.steerAngleDeg, -22.0, 22.0);
             const double angle = (clamped / 22.0) * 90.0; // map raw steer -> visual range
-            const int targetSize = 140;
-            QTransform t;
+            const int targetSize = std::min(steeringLabel->width(), steeringLabel->height());
+            // Rotate on a fixed-size canvas to avoid apparent shrinking at angles.
+            QPixmap base = src->scaled(targetSize, targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            QPixmap canvas(targetSize, targetSize);
+            canvas.fill(Qt::transparent);
+            QPainter painter(&canvas);
+            painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+            painter.translate(targetSize / 2.0, targetSize / 2.0);
             // Qt: positive angle is CCW (left); need CW for positive degrees -> rotate(-angle)
-            t.rotate(-angle);
-            QPixmap rotated = src->transformed(t, Qt::SmoothTransformation);
-            QPixmap scaled = rotated.scaled(targetSize, targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-            steeringLabel->setPixmap(scaled);
+            painter.rotate(-angle);
+            painter.translate(-base.width() / 2.0, -base.height() / 2.0);
+            painter.drawPixmap(0, 0, base);
+            painter.end();
+            steeringLabel->setPixmap(canvas);
         } else {
             steeringLabel->setText("No wheel");
         }
@@ -664,10 +694,13 @@ void InfotainmentWidget::applyDetailView(const RenderingData::RenderPayload& pay
     };
     const auto maxIdx = std::min(detailRows.size(), static_cast<size_t>(payload.curScores.size()));
     for (size_t i = 0; i < maxIdx; ++i) {
+        const int value = payload.curScores[i];
         detailRows[i].name->setText(kNames[i]);
-        detailRows[i].bar->setValue(payload.curScores[i]);
-        detailRows[i].value->setStyleSheet("font-size: 42px; color: #111111;");
-        detailRows[i].value->setText(QString::number(payload.curScores[i]));
+        detailRows[i].bar->setVisible(value > 0);
+        const int scaledValue = std::min(value * 3, detailRows[i].bar->maximum());
+        detailRows[i].bar->setValue(scaledValue);
+        detailRows[i].value->setStyleSheet("font-size: 42px; color: #000000;");
+        detailRows[i].value->setText(QString::number(value));
     }
 }
 
@@ -697,8 +730,11 @@ void InfotainmentWidget::applyHistoryView(const RenderingData::RenderPayload& pa
     std::sort(events.begin(), events.end(), [](const auto& a, const auto& b) {
         return a.timestampMs < b.timestampMs;
     });
-    const int64_t startMs = events.front().timestampMs;
-    const int64_t endMs = events.back().timestampMs;
+    int64_t startMs = payload.sessionStartMs >= 0 ? payload.sessionStartMs : events.front().timestampMs;
+    int64_t endMs = payload.sessionEndMs >= 0 ? payload.sessionEndMs : events.back().timestampMs;
+    if (endMs < startMs) {
+        endMs = startMs;
+    }
     const int64_t duration = std::max<int64_t>(1, endMs - startMs);
 
     const int marginLeft = 90;
@@ -748,7 +784,7 @@ void InfotainmentWidget::applyHistoryView(const RenderingData::RenderPayload& pa
 
     // Place icons
     for (const auto& ev : events) {
-        const double tRatio = static_cast<double>(ev.timestampMs - startMs) / duration;
+        const double tRatio = std::clamp(static_cast<double>(ev.timestampMs - startMs) / duration, 0.0, 1.0);
         const double x = marginLeft + timelineWidth * tRatio;
         int laneIdx = -1;
         for (int r = 0; r < rowCount; ++r) {

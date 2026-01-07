@@ -24,7 +24,6 @@ ShmIntegrated* init_shared_memory(void)
         close(shm_fd);
         return NULL;
     }
-    
 
     // 3. mapping shared memory
     ShmIntegrated* p_shm = (ShmIntegrated*)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
@@ -34,6 +33,9 @@ ShmIntegrated* init_shared_memory(void)
         close(shm_fd);
         return NULL;
     }
+
+    p_shm->generated_info.driving_score_type.score_type = SCORE_TYPE_NONE;
+    p_shm->generated_info.driving_score_type.count = 0;
 
     close(shm_fd);
     return p_shm;

@@ -34,10 +34,7 @@ public:
 
         // Shared Memory for generated data
         uint8_t warningSignal;
-
-        
         uint8_t emotion;
-        uint8_t scoreDirection;
 
         // UserData
         UserData& userData;  // user data reference
@@ -66,7 +63,6 @@ public:
     void setFrameSignals(const RawData& rawData,
                          uint8_t warningSignal,
                          uint8_t emotion,
-                         uint8_t scoreDirection,
                          uint8_t displayType,
                          bool useDrivingScoreCheck,
                          std::vector<ViolationEvent> violations);
