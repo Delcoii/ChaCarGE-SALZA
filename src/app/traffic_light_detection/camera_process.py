@@ -10,6 +10,23 @@ def camera_process(shm_name):
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_W)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_H)
+    
+    # === Camera Settings for Overexposure & White Balance (Using v4l2-ctl) ===
+    import os
+    # 1. Disable Auto Exposure (1=Manual Mode)
+    os.system("v4l2-ctl -d /dev/video0 -c auto_exposure=1")
+    
+    # 2. Set Exposure Time (Low value = Darker image, Less motion blur)
+    # Range: usually 3~2047. Try 50, 100, 200...
+    os.system("v4l2-ctl -d /dev/video0 -c exposure_time_absolute=150")
+    
+    # 3. Adjust Brightness directly via driver
+    os.system("v4l2-ctl -d /dev/video0 -c brightness=70")
+    
+    # 4. Disable Auto White Balance & Set Temperature
+    os.system("v4l2-ctl -d /dev/video0 -c white_balance_automatic=0")
+    os.system("v4l2-ctl -d /dev/video0 -c white_balance_temperature=4500")
+    # =========================================================================
 
     # Attach to shared memory
     shm = shared_memory.SharedMemory(name=shm_name)
