@@ -8,7 +8,7 @@
 
 // Define Loop Period: 10ms = 10,000,000 nanoseconds (100Hz)
 // Target loop period: 30 ms
-#define LOOP_PERIOD_NS 30000000LL
+#define LOOP_PERIOD_NS 10000000LL
 
 // Global variables for signal handling
 ShmIntegrated* g_p_shm = NULL;

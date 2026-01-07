@@ -129,9 +129,9 @@ ImageData::EmotionGifType RenderingData::toEmotionType(uint8_t raw) {
 
 ImageData::TierType RenderingData::toTierType(uint16_t score) {
     // Simple thresholds; adjust as needed
-    if (score >= 800) return ImageData::TierType::MASTER;
-    if (score >= 600) return ImageData::TierType::DIAMOND;
-    if (score >= 400) return ImageData::TierType::GOLD;
-    if (score >= 200) return ImageData::TierType::SILVER;
+    if (score >= 95) return ImageData::TierType::MASTER;
+    if (score >= 90) return ImageData::TierType::DIAMOND;
+    if (score >= 71) return ImageData::TierType::GOLD;
+    if (score >= 61) return ImageData::TierType::SILVER;
     return ImageData::TierType::BRONZE;
 }
