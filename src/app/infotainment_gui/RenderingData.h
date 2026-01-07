@@ -56,7 +56,6 @@ public:
         uint8_t rawSignSignal = 0;
         uint8_t rawWarningSignal = 0;
         uint8_t rawEmotionSignal = 0;
-        uint8_t scoreDirection = 0;
 
         bool useDrivingScoreCheckActive = false;
         std::vector<BaseData::ViolationEvent> violations;

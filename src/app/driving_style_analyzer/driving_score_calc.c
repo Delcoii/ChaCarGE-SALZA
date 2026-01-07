@@ -132,8 +132,8 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     // We check in reverse order of priority or use else-if carefully.
     
 
-    output->driving_score_type.score_type = SCORE_TYPE_NONE; // Reset first
-    output->driving_score_type.count = 0;
+    //output->driving_score_type.score_type = SCORE_TYPE_NONE; // Reset first
+    //output->driving_score_type.count = 0;
 
     // (A) Signal Violation (Highest Priority)
     if (state->prev_traffic_state == TRAFFIC_STATE_RED && traffic == TRAFFIC_STATE_NONE && state->prev_throttle > 50.0) {
