@@ -10,6 +10,7 @@ CFLAGS 		= -Wall -g
 ROOT_DIR 	= ../../..
 IPC_DIR 	= $(ROOT_DIR)/src/bsw/ipc
 DSA_DIR     = $(ROOT_DIR)/src/app/driving_style_analyzer
+BUILD_DIR	= $(ROOT_DIR)/build
 
 # include files directory and library directory
 INC_DIR 	= $(IPC_DIR)/inc
@@ -20,7 +21,7 @@ INCLUDES 	= -I$(INC_DIR) -I$(LIB_DIR)
 LIBS		= -lrt -lm
 
 # build target
-TARGET 		= analyzer
+TARGET 		= $(BUILD_DIR)/analyzer
 
 # source files
 # 1) main source file
@@ -33,9 +34,13 @@ SRCS		= analyzer.c \
 all: $(TARGET)
 
 $(TARGET): $(SRCS)
+		@echo "[Analyzer] Checking build directory..."
+		@mkdir -p $(dir $@) # Create build directory if it doesn't exist
+		@echo "[Analyzer] Compiling: $@"
 		$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
-		@echo "[Analyzer make file] Build completed: $(TARGET)"
+		@echo "[Analyzer] Build completed successfully!"
 
 clean:
+		@echo "[Analyzer] Cleaning..."
 		rm -f $(TARGET)
-		@echo "[Analyzer make file] Clean completed."
+		@echo "[Analyzer] Clean completed."
