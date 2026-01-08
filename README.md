@@ -1,5 +1,8 @@
 # Telechips Embedded School 3rd  - Final Project
-- Driving Habit Improvement System Using Driving Platform & Data
+## Driving Habit Improvement System Using Driving Platform & Data
+
+![Infotainment GUI](gui.png)
+![Platform](platform.png)
 - Vehicle Platform Construction
     - **Seonghoon Park**
 - Traffic Light Recognition Algorithm
