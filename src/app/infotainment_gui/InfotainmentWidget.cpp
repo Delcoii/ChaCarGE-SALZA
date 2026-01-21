@@ -348,7 +348,7 @@ bool InfotainmentWidget::eventFilter(QObject* watched, QEvent* event) {
 
 void InfotainmentWidget::mousePressEvent(QMouseEvent* event) {
     if (toggleBtn && lastThrottle >= 1.0) {
-        const QPoint pos = event->position().toPoint();
+        const QPoint pos = event->pos();
         if (toggleBtn->geometry().contains(pos)) {
             flashThrottleBlocked();
             event->accept();
