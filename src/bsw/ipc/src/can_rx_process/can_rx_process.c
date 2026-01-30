@@ -4,12 +4,11 @@
 #include <signal.h>
 #include <math.h> // -lm need for compilation
 #include <string.h>
+#include <stdint.h>
+#include <fcntl.h>
 
 #include <linux/can.h>
 #include <linux/can/raw.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
 #include <errno.h>
 
 
@@ -19,7 +18,7 @@
 // global variable (for signal handler)
 ShmIntegrated* p_shm = NULL;
 int keep_running = 1;
-static int can_socket = -1;
+static int ipc_fd = -1;
 
 // shutdown signal handler
 void signal_handler(int sig) {
@@ -27,8 +26,61 @@ void signal_handler(int sig) {
     keep_running = 0;
 }
 
-// can
-static int init_can_socket(const char *ifname);
+// ipc
+static int init_ipc_device(const char *path);
+static int read_ipc_can_frame(int fd, struct can_frame *out_frame);
+
+// IPC protocol (from R5 IPC driver)
+#define IPC_SYNC        (0xFF)
+#define IPC_START1      (0x55)
+#define IPC_START2      (0xAA)
+#define IPC_HDR_SIZE    (9)
+#define IPC_MAX_PACKET  (0x400)
+
+static uint16_t ipc_crc16(const uint8_t *buf, uint32_t len, uint16_t init)
+{
+    static const uint16_t crc16Table[256] = {
+        0x0000U, 0x1021U, 0x2042U, 0x3063U, 0x4084U, 0x50a5U, 0x60c6U, 0x70e7U,
+        0x8108U, 0x9129U, 0xa14aU, 0xb16bU, 0xc18cU, 0xd1adU, 0xe1ceU, 0xf1efU,
+        0x1231U, 0x0210U, 0x3273U, 0x2252U, 0x52b5U, 0x4294U, 0x72f7U, 0x62d6U,
+        0x9339U, 0x8318U, 0xb37bU, 0xa35aU, 0xd3bdU, 0xc39cU, 0xf3ffU, 0xe3deU,
+        0x2462U, 0x3443U, 0x0420U, 0x1401U, 0x64e6U, 0x74c7U, 0x44a4U, 0x5485U,
+        0xa56aU, 0xb54bU, 0x8528U, 0x9509U, 0xe5eeU, 0xf5cfU, 0xc5acU, 0xd58dU,
+        0x3653U, 0x2672U, 0x1611U, 0x0630U, 0x76d7U, 0x66f6U, 0x5695U, 0x46b4U,
+        0xb75bU, 0xa77aU, 0x9719U, 0x8738U, 0xf7dfU, 0xe7feU, 0xd79dU, 0xc7bcU,
+        0x48c4U, 0x58e5U, 0x6886U, 0x78a7U, 0x0840U, 0x1861U, 0x2802U, 0x3823U,
+        0xc9ccU, 0xd9edU, 0xe98eU, 0xf9afU, 0x8948U, 0x9969U, 0xa90aU, 0xb92bU,
+        0x5af5U, 0x4ad4U, 0x7ab7U, 0x6a96U, 0x1a71U, 0x0a50U, 0x3a33U, 0x2a12U,
+        0xdbfdU, 0xcbdcU, 0xfbbfU, 0xeb9eU, 0x9b79U, 0x8b58U, 0xbb3bU, 0xab1aU,
+        0x6ca6U, 0x7c87U, 0x4ce4U, 0x5cc5U, 0x2c22U, 0x3c03U, 0x0c60U, 0x1c41U,
+        0xedaeU, 0xfd8fU, 0xcdecU, 0xddcdU, 0xad2aU, 0xbd0bU, 0x8d68U, 0x9d49U,
+        0x7e97U, 0x6eb6U, 0x5ed5U, 0x4ef4U, 0x3e13U, 0x2e32U, 0x1e51U, 0x0e70U,
+        0xff9fU, 0xefbeU, 0xdfddU, 0xcffcU, 0xbf1bU, 0xaf3aU, 0x9f59U, 0x8f78U,
+        0x9188U, 0x81a9U, 0xb1caU, 0xa1ebU, 0xd10cU, 0xc12dU, 0xf14eU, 0xe16fU,
+        0x1080U, 0x00a1U, 0x30c2U, 0x20e3U, 0x5004U, 0x4025U, 0x7046U, 0x6067U,
+        0x83b9U, 0x9398U, 0xa3fbU, 0xb3daU, 0xc33dU, 0xd31cU, 0xe37fU, 0xf35eU,
+        0x02b1U, 0x1290U, 0x22f3U, 0x32d2U, 0x4235U, 0x5214U, 0x6277U, 0x7256U,
+        0xb5eaU, 0xa5cbU, 0x95a8U, 0x8589U, 0xf56eU, 0xe54fU, 0xd52cU, 0xc50dU,
+        0x34e2U, 0x24c3U, 0x14a0U, 0x0481U, 0x7466U, 0x6447U, 0x5424U, 0x4405U,
+        0xa7dbU, 0xb7faU, 0x8799U, 0x97b8U, 0xe75fU, 0xf77eU, 0xc71dU, 0xd73cU,
+        0x26d3U, 0x36f2U, 0x0691U, 0x16b0U, 0x6657U, 0x7676U, 0x4615U, 0x5634U,
+        0xd94cU, 0xc96dU, 0xf90eU, 0xe92fU, 0x99c8U, 0x89e9U, 0xb98aU, 0xa9abU,
+        0x5844U, 0x4865U, 0x7806U, 0x6827U, 0x18c0U, 0x08e1U, 0x3882U, 0x28a3U,
+        0xcb7dU, 0xdb5cU, 0xeb3fU, 0xfb1eU, 0x8bf9U, 0x9bd8U, 0xabbbU, 0xbb9aU,
+        0x4a75U, 0x5a54U, 0x6a37U, 0x7a16U, 0x0af1U, 0x1ad0U, 0x2ab3U, 0x3a92U,
+        0xfd2eU, 0xed0fU, 0xdd6cU, 0xcd4dU, 0xbdaaU, 0xad8bU, 0x9de8U, 0x8dc9U,
+        0x7c26U, 0x6c07U, 0x5c64U, 0x4c45U, 0x3ca2U, 0x2c83U, 0x1ce0U, 0x0cc1U,
+        0xef1fU, 0xff3eU, 0xcf5dU, 0xdf7cU, 0xaf9bU, 0xbfbaU, 0x8fd9U, 0x9ff8U,
+        0x6e17U, 0x7e36U, 0x4e55U, 0x5e74U, 0x2e93U, 0x3eb2U, 0x0ed1U, 0x1ef0U
+    };
+
+    uint16_t crc = init;
+    for (uint32_t i = 0; i < len; i++) {
+        uint32_t temp = ((crc >> 8U) ^ buf[i]) & 0xFFU;
+        crc = crc16Table[temp] ^ (uint16_t)(crc << 8U);
+    }
+    return crc;
+}
 
 
 int main() {
@@ -44,9 +96,9 @@ int main() {
         return 1;
     }
 
-    // init can
-    if (init_can_socket("can0") != 0) {
-        printf("can init failed!");
+    // init ipc
+    if (init_ipc_device("/dev/tcc_ipc_micom") != 0) {
+        printf("ipc init failed!");
     }
     struct can_frame frame;     // received can frame
 
@@ -62,14 +114,11 @@ int main() {
     uint32_t check_id;
     // 3. main loop (data generation -> shared memory write)
     while (keep_running) {   
-        int nbytes = read(can_socket, &frame, sizeof(frame));
+        int nbytes = read_ipc_can_frame(ipc_fd, &frame);
         if (nbytes < 0) {
             if (errno == EINTR) continue;
-            perror("read(can)");
-            continue;
-        }
-        if (nbytes != sizeof(frame)) {
-            fprintf(stderr, "Incomplete CAN frame (%d bytes)\n", nbytes);
+            if (errno == EAGAIN) continue;
+            perror("read(ipc)");
             continue;
         }
 
@@ -130,52 +179,89 @@ int main() {
 }
 
 
-static int init_can_socket(const char *ifname) {
-    struct sockaddr_can addr;
-    struct ifreq ifr;
-    
-    can_socket = socket(PF_CAN, SOCK_RAW, CAN_RAW);
-    if (can_socket < 0) { perror("socket(PF_CAN)"); return -1; }
-
-    memset(&ifr, 0, sizeof(ifr));
-    strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
-
-    if (ioctl(can_socket, SIOCGIFINDEX, &ifr) < 0) {
-        perror("ioctl(SIOCGIFINDEX)");
-        close(can_socket);
-        can_socket = -1;
+static int init_ipc_device(const char *path) {
+    ipc_fd = open(path, O_RDONLY);
+    if (ipc_fd < 0) {
+        perror("open(ipc)");
         return -1;
     }
-
-    memset(&addr, 0, sizeof(addr));
-    addr.can_family  = AF_CAN;
-    addr.can_ifindex = ifr.ifr_ifindex;
-
-    if (bind(can_socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        perror("bind(AF_CAN)");
-        close(can_socket);
-        can_socket = -1;
-        return -1;
-    }
-
-    struct can_filter rfilter[4];
-    rfilter[0].can_id   = CANID_VEHICLE_COMMAND1;
-    rfilter[0].can_mask = CAN_SFF_MASK;  // 11-bit
-    
-    rfilter[1].can_id   = CANID_VEHICLE_COMMAND2;
-    rfilter[1].can_mask = CAN_SFF_MASK;
-
-    rfilter[2].can_id   = CANID_IMU_DATA;
-    rfilter[2].can_mask = CAN_SFF_MASK;
-
-    rfilter[3].can_id   = CANID_TRAFFIC_SIGN;
-    rfilter[3].can_mask = CAN_SFF_MASK;
-
-    if (setsockopt(can_socket, SOL_CAN_RAW, CAN_RAW_FILTER,
-                   &rfilter, sizeof(rfilter)) < 0) {
-        perror("setsockopt(CAN_RAW_FILTER)");
-    }
-
-    printf("CAN Socket bound on %s (ifindex=%d)\n", ifname, ifr.ifr_ifindex);
+    printf("IPC device opened: %s\n", path);
     return 0;
+}
+
+static int read_exact(int fd, uint8_t *buf, size_t len)
+{
+    size_t got = 0;
+    while (got < len) {
+        ssize_t r = read(fd, buf + got, len - got);
+        if (r < 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        if (r == 0) return -1;
+        got += (size_t)r;
+    }
+    return 0;
+}
+
+static int read_ipc_can_frame(int fd, struct can_frame *out_frame)
+{
+    uint8_t hdr[IPC_HDR_SIZE];
+    uint8_t data[IPC_MAX_PACKET];
+    uint8_t window[3] = {0};
+    int synced = 0;
+
+    while (!synced) {
+        uint8_t b;
+        ssize_t r = read(fd, &b, 1);
+        if (r < 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        if (r == 0) return -1;
+        window[0] = window[1];
+        window[1] = window[2];
+        window[2] = b;
+        if (window[0] == IPC_SYNC && window[1] == IPC_START1 && window[2] == IPC_START2) {
+            hdr[0] = window[0];
+            hdr[1] = window[1];
+            hdr[2] = window[2];
+            if (read_exact(fd, &hdr[3], IPC_HDR_SIZE - 3) != 0) return -1;
+            synced = 1;
+        }
+    }
+
+    uint16_t cmd1 = (uint16_t)((hdr[3] << 8) | hdr[4]);
+    uint16_t cmd2 = (uint16_t)((hdr[5] << 8) | hdr[6]);
+    uint16_t len  = (uint16_t)((hdr[7] << 8) | hdr[8]);
+    uint16_t data_len = len;
+    uint16_t rx_len = (len == 0) ? 1 : len;
+    uint16_t total = IPC_HDR_SIZE + rx_len + 2;
+    if (total > IPC_MAX_PACKET) {
+        errno = EIO;
+        return -1;
+    }
+
+    if (read_exact(fd, data, rx_len + 2) != 0) {
+        if (errno == 0) errno = EIO;
+        return -1;
+    }
+
+    uint16_t crc_calc = ipc_crc16(hdr, IPC_HDR_SIZE, 0);
+    crc_calc = ipc_crc16(data, rx_len, crc_calc);
+    uint16_t crc_recv = (uint16_t)((data[rx_len] << 8) | data[rx_len + 1]);
+    if (crc_calc != crc_recv) {
+        errno = EIO;
+        return -1;
+    }
+
+    memset(out_frame, 0, sizeof(*out_frame));
+    out_frame->can_id = cmd2 & CAN_SFF_MASK;
+    out_frame->can_dlc = (data_len > 8) ? 8 : data_len;
+    if (out_frame->can_dlc > 0) {
+        memcpy(out_frame->data, data, out_frame->can_dlc);
+    }
+
+    (void)cmd1;
+    return (int)sizeof(*out_frame);
 }
