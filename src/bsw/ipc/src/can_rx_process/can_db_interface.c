@@ -52,13 +52,13 @@ TrafficSignState SetTrafficSignFromCAN(const struct can_frame *frame) {
             traffic_sign.sign_state = TRAFFIC_STATE_NONE;
             break;
         case 1:
-            traffic_sign.sign_state = TRAFFIC_STATE_RED;
+            traffic_sign.sign_state = TRAFFIC_STATE_GREEN;
             break;
         case 2:
-            traffic_sign.sign_state = TRAFFIC_STATE_YELLOW;
+            traffic_sign.sign_state = TRAFFIC_STATE_RED;
             break;
         case 3:
-            traffic_sign.sign_state = TRAFFIC_STATE_GREEN;
+            traffic_sign.sign_state = TRAFFIC_STATE_YELLOW;
             break;
         default:
             break;
