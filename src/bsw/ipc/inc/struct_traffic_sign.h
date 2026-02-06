@@ -7,9 +7,9 @@
 
 enum {
     TRAFFIC_STATE_NONE = 0,
+    TRAFFIC_STATE_GREEN,
     TRAFFIC_STATE_RED,
     TRAFFIC_STATE_YELLOW,
-    TRAFFIC_STATE_GREEN,
 };
 
 typedef struct {
