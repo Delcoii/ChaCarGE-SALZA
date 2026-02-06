@@ -21,7 +21,7 @@
 #define THRESH_HARD_BRAKE_G         0.20
 #define THRESH_AGGRESSIVE_TURN_G    0.25
 #define THRESH_SUDDEN_ACCEL_G       0.20
-#define THRESH_BUMP_G               0.70  // bump detection threshold
+#define THRESH_BUMP_G               -4.0  // bump detection threshold
 
 // Automatic conversion to m/s^2
 #define THRESH_BRAKE_MPS2           (THRESH_HARD_BRAKE_G * GRAVITY_MPS2)
@@ -43,7 +43,7 @@
 #define SEGMENT_TIMEOUT_TICKS       15000   // 6000 ticks = 60s timeout
 
 /* size of Moving Window */
-#define MAX_WINDOW_SIZE             10
+#define MAX_WINDOW_SIZE             20
 #define LPF_ALPHA                   0.1
 
 // Cooldown for Event Detection
