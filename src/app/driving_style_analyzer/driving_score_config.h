@@ -50,4 +50,7 @@
 #define EVENT_COOLDOWN_TICKS         100   // 100 ticks (1s)
 #define SUDDEN_EVENT_COOLDOWN_TICKS  500   // 500 ticks (5s)
 
+/* --- 4. Values for calibration --- */
+#define CALIBRATION_STEER_OFFSET    1.6
+
 #endif // DRIVING_SCORE_CONFIG_H

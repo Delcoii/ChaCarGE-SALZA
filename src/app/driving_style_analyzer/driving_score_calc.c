@@ -160,7 +160,7 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
     }
 
     /*Countinuos Events Check*/
-    int is_turning = (throttle > FULL_THROTTLE_LIMIT && fabs(steer) > MAX_STEER_ANGLE);
+    int is_turning = (throttle > FULL_THROTTLE_LIMIT && fabs(steer - CALIBRATION_STEER_OFFSET) > MAX_STEER_ANGLE);
     int is_accel = (throttle_rate > THRESH_THROTTLE_RATE_PPS && throttle > MIN_THROTTLE_FOR_ACCEL);
     //int is_brake = (acc_x < -THRESH_BRAKE_MPS2);
     
