@@ -186,7 +186,7 @@ void update_driving_score(const ShmGivenInfo* input, ShmGeneratedInfo* output, A
         }        // (D) Speed Bump Detection (If no higher priority event)
         // Note: Bump detection is independent of continuous events
         else {
-            if(state->bump_cooldown_ticks == 0 && (filtered_acc_z) >= (-2.0) ) {
+            if(state->bump_cooldown_ticks == 0 && (filtered_acc_z) >= (THRESH_BUMP_G) ) {
                 curr_seg->bump_ticks++;
                 output->driving_score_type.score_type = SCORE_BUMP;
                 output->driving_score_type.count = ++state->bump_count;
