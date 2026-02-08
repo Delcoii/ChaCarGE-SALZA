@@ -116,8 +116,11 @@ int main() {
     uint32_t check_id;
     // 3. main loop (data generation -> shared memory write)
     while (keep_running) {   
+        printf("before flush\n");
 	ioctl(ipc_fd, IOCTL_IPC_FLUSH, NULL);
+	printf("after flush\n");
 	int nbytes = read_ipc_can_frame(ipc_fd, &frame);
+	printf("after read: %d (errno=%d)\n", nbytes, errno);
         if (nbytes < 0) {
             if (errno == EINTR) continue;
             if (errno == EAGAIN) continue;
