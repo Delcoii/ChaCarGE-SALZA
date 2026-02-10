@@ -21,7 +21,9 @@
 #define THRESH_HARD_BRAKE_G         0.20
 #define THRESH_AGGRESSIVE_TURN_G    0.25
 #define THRESH_SUDDEN_ACCEL_G       0.20
-#define THRESH_BUMP_G               -4.0  // bump detection threshold
+
+// Threshold in amu_z for bump detection
+#define THRESH_BUMP_Z               -3.0  // bump detection threshold
 
 // Automatic conversion to m/s^2
 #define THRESH_BRAKE_MPS2           (THRESH_HARD_BRAKE_G * GRAVITY_MPS2)
@@ -35,7 +37,7 @@
 #define MIN_THROTTLE_FOR_ACCEL      10.0  // minimum throttle to consider as acceleration
 
 // Condition of sudden acceleration
-#define THRESH_THROTTLE_RATE_PPS    700.0  // per second
+#define THRESH_THROTTLE_RATE_PPS    4000.0  // per second
 
 /* --- 3. TMAP Segment Config --- */
 #define SEGMENT_DISTANCE_KM         0.05   // 50m Segment

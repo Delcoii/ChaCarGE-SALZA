@@ -100,9 +100,9 @@ RenderingData::DisplayType RenderingData::toDisplayType(uint8_t raw) {
 ImageData::SignType RenderingData::toSignType(uint8_t raw) {
     switch (raw) {
     case 0: return ImageData::SignType::NONE;
-    case 1: return ImageData::SignType::TRAFFIC_RED;
-    case 2: return ImageData::SignType::TRAFFIC_YELLOW;
-    case 3: return ImageData::SignType::TRAFFIC_GREEN;
+    case 1: return ImageData::SignType::TRAFFIC_GREEN;
+    case 2: return ImageData::SignType::TRAFFIC_RED;
+    case 3: return ImageData::SignType::TRAFFIC_YELLOW;
     default: return ImageData::SignType::NONE;
     }
 }

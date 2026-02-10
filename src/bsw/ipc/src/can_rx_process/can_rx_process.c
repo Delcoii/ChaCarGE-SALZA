@@ -2,45 +2,50 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
-#include <math.h> // -lm need for compilation
+#include <math.h>
 #include <string.h>
 #include <stdint.h>
 #include <fcntl.h>
-
-#include <linux/can.h>
-#include <linux/can/raw.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <linux/can.h>
+#include <linux/can/raw.h>
 
+// 사용자가 정의한 헤더들 (기존 유지)
 #include "shm_functions.h"
 #include "can_db_interface.h"
 
-// global variable (for signal handler)
-ShmIntegrated* p_shm = NULL;
-int keep_running = 1;
-static int ipc_fd = -1;
-
-// shutdown signal handler
-void signal_handler(int sig) {
-    printf("\n[Generator] Test data generator shutdown requested. Cleaning up...\n");
-    keep_running = 0;
-}
-
-// ipc
-static int init_ipc_device(const char *path);
-static int read_ipc_can_frame(int fd, struct can_frame *out_frame);
-
-// IPC protocol (from R5 IPC driver)
+// =============================================================
+// IPC Protocol Definitions
+// =============================================================
 #define IPC_SYNC        (0xFF)
 #define IPC_START1      (0x55)
 #define IPC_START2      (0xAA)
 #define IPC_HDR_SIZE    (9)
-#define IPC_MAX_PACKET  (0x400)
-#define TCC_IPC_MAGIC ('I')
-#define IOCTL_IPC_FLUSH (_IO(TCC_IPC_MAGIC, 4))
+#define IPC_MAX_PACKET  (0x400) // 1024 bytes
+#define TCC_IPC_MAGIC   ('I')
+// FLUSH는 사용하지 않을 것이므로 정의만 남겨둠 (혹은 삭제 가능)
+#define IOCTL_IPC_FLUSH (_IO(TCC_IPC_MAGIC, 4)) 
 
-static uint16_t ipc_crc16(const uint8_t *buf, uint32_t len, uint16_t init)
-{
+// =============================================================
+// Global Variables
+// =============================================================
+ShmIntegrated* p_shm = NULL;
+int keep_running = 1;
+static int ipc_fd = -1;
+
+// =============================================================
+// Signal Handler
+// =============================================================
+void signal_handler(int sig) {
+    printf("\n[Generator] Shutdown requested. Cleaning up...\n");
+    keep_running = 0;
+}
+
+// =============================================================
+// CRC Function
+// =============================================================
+static uint16_t ipc_crc16(const uint8_t *buf, uint32_t len, uint16_t init) {
     static const uint16_t crc16Table[256] = {
         0x0000U, 0x1021U, 0x2042U, 0x3063U, 0x4084U, 0x50a5U, 0x60c6U, 0x70e7U,
         0x8108U, 0x9129U, 0xa14aU, 0xb16bU, 0xc18cU, 0xd1adU, 0xe1ceU, 0xf1efU,
@@ -84,106 +89,99 @@ static uint16_t ipc_crc16(const uint8_t *buf, uint32_t len, uint16_t init)
     return crc;
 }
 
-
-int main() {
-    // 1. enroll signal handler
-    signal(SIGINT, signal_handler);
-
-    // 2. initialize
-    printf("[Generator] Test data generator starting...\n");
-    p_shm = init_shared_memory();
-    if (p_shm == NULL)
-    {
-        fprintf(stderr, "[Generator - Error] SHM initialization failed.\n");
-        return 1;
-    }
-
-    // init ipc
-    if (init_ipc_device("/dev/tcc_ipc_micom") != 0) {
-        printf("ipc init failed!");
-    }
-    struct can_frame frame;     // received can frame
-
-    
-    // initialize variables
-    double time_step = 0.0;
-
-    printf("[Generator] Test data generation started (Ctrl+C to stop)\n");
-    printf("--------------------------------------------------------------------------------------------------------\n");
-    printf("  TIME  |  THROTTLE  |   BRAKE   |  STEER  | TRAFFIC |  IMU_X  |  IMU_Y  |  IMU_Z  |  DRIVE_DISTANCE \n");
-    printf("--------------------------------------------------------------------------------------------------------\n");
-
-    uint32_t check_id;
-    // 3. main loop (data generation -> shared memory write)
-    while (keep_running) {   
-	ioctl(ipc_fd, IOCTL_IPC_FLUSH, NULL);
-	int nbytes = read_ipc_can_frame(ipc_fd, &frame);
-        if (nbytes < 0) {
+// =============================================================
+// Helper: Read Exact Bytes
+// =============================================================
+static int read_exact(int fd, uint8_t *buf, size_t len) {
+    size_t got = 0;
+    while (got < len) {
+        ssize_t r = read(fd, buf + got, len - got);
+        if (r < 0) {
             if (errno == EINTR) continue;
-            if (errno == EAGAIN) continue;
-            perror("read(ipc)");
-            continue;
+            // Non-blocking 모드일 경우 데이터 없음
+            if (errno == EAGAIN || errno == EWOULDBLOCK) return -2; 
+            return -1;
         }
-
-        // check error
-        if (frame.can_id & CAN_ERR_FLAG) continue; 
-        if (frame.can_id & CAN_RTR_FLAG) continue; 
-        check_id = frame.can_id & CAN_EFF_MASK;
-        if (!(frame.can_id & CAN_EFF_FLAG)) {
-            check_id &= CAN_SFF_MASK;
-        }
-        // printf("RX ID: 0x%X, Data: %02X %02X %02X %02X %02X %02X %02X %02X\n", 
-        //        check_id, 
-        //        frame.data[0], frame.data[1], frame.data[2], frame.data[3],
-        //        frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
-
-        // TODO : mutex?
-        switch (check_id) {
-            case CANID_VEHICLE_COMMAND1:
-                p_shm->given_info.vehicle_command = SetVehicleCommandFromCAN(&frame);
-                break;
-            case CANID_IMU_DATA:
-                p_shm->given_info.imu_accel = SetIMUDataFromCAN(&frame);
-                break;
-            case CANID_TRAFFIC_SIGN:
-                p_shm->given_info.traffic_state = SetTrafficSignFromCAN(&frame);
-                break;    
-            default:
-                break;
-        }  
-       
-    
-        // --- [F] monitoring output ---
-        printf("\r  %4.1fs |    %3.0f     |    %3.0f    |  %5.1f  |    %d    |  %4.2f  |  %4.2f  |  %4.2f  |  %4.2f  ", 
-               time_step,
-               p_shm->given_info.vehicle_command.throttle,
-               p_shm->given_info.vehicle_command.brake,
-               p_shm->given_info.vehicle_command.steer_tire_degree,
-               p_shm->given_info.traffic_state.sign_state,
-               p_shm->given_info.imu_accel.x_mps2,
-               p_shm->given_info.imu_accel.y_mps2,
-               p_shm->given_info.imu_accel.z_mps2,
-               p_shm->given_info.drive_distance.data_km
-               );
-        
-        fflush(stdout); // clearing buffer
-
-        // updating time
-        time_step += 0.1;
-        // usleep(100000); // 100ms (10Hz)
+        if (r == 0) return -1; // EOF
+        got += (size_t)r;
     }
-
-    // 4. shutdown processing
-    printf("\n[Generator] shutting down.\n");
-    detach_shared_memory(p_shm);
-    destroy_shared_memory(); // if this process shutting down, destroy SHM
-
     return 0;
 }
 
+// =============================================================
+// IPC Read Function (Optimized)
+// =============================================================
+static int read_ipc_can_frame(int fd, struct can_frame *out_frame) {
+    uint8_t hdr[IPC_HDR_SIZE];
+    uint8_t data[IPC_MAX_PACKET];
+    
+    // [성능 개선] 1바이트씩 읽지 않고, 헤더 크기만큼 먼저 시도
+    // 만약 스트림이 깨졌다면(Sync 안 맞음), 그때 1바이트씩 찾음
+    
+    // 1. 헤더 읽기 시도
+    int ret = read_exact(fd, hdr, IPC_HDR_SIZE);
+    if (ret == -2) return 0; // 데이터 없음 (Non-blocking)
+    if (ret < 0) return -1;  // 에러
+
+    // 2. Sync 체크 (Fast Path)
+    if (hdr[0] == IPC_SYNC && hdr[1] == IPC_START1 && hdr[2] == IPC_START2) {
+        // 정상: 다음 단계 진행
+    } 
+    else {
+        // [복구 모드] Sync가 안 맞음. 1바이트씩 밀면서 Sync 찾기
+        // 이미 읽은 hdr 버퍼를 활용해 sliding window 수행
+        uint8_t window[3] = {hdr[IPC_HDR_SIZE-3], hdr[IPC_HDR_SIZE-2], hdr[IPC_HDR_SIZE-1]};
+        // (간단하게 구현: 일단 동기화 맞을 때까지 1바이트씩 read)
+        int synced = 0;
+        // 주의: 이미 읽은 데이터 중 뒷부분에 sync가 있을 수 있으나, 
+        // 복잡도 줄이기 위해 여기서부터 다시 찾음.
+        
+        while (!synced) {
+             uint8_t b;
+             if (read_exact(fd, &b, 1) != 0) return -1;
+             window[0] = window[1];
+             window[1] = window[2];
+             window[2] = b;
+             if (window[0] == IPC_SYNC && window[1] == IPC_START1 && window[2] == IPC_START2) {
+                 // Sync 찾음! 헤더의 나머지 부분 읽기
+                 hdr[0] = window[0]; hdr[1] = window[1]; hdr[2] = window[2];
+                 if (read_exact(fd, &hdr[3], IPC_HDR_SIZE - 3) != 0) return -1;
+                 synced = 1;
+             }
+        }
+    }
+
+    // 3. 데이터 길이 파싱
+    uint16_t cmd2 = (uint16_t)((hdr[5] << 8) | hdr[6]);
+    uint16_t len  = (uint16_t)((hdr[7] << 8) | hdr[8]);
+    uint16_t rx_len = (len == 0) ? 1 : len;
+    
+    // 4. 데이터 본문 읽기
+    if (read_exact(fd, data, rx_len + 2) != 0) return -1; // +2 for CRC
+
+    // 5. CRC 검증
+    uint16_t crc_calc = ipc_crc16(hdr, IPC_HDR_SIZE, 0);
+    crc_calc = ipc_crc16(data, rx_len, crc_calc);
+    uint16_t crc_recv = (uint16_t)((data[rx_len] << 8) | data[rx_len + 1]);
+
+    if (crc_calc != crc_recv) {
+        // CRC 에러 시 이번 프레임 무시하고 다음 프레임 대기
+        return 0; 
+    }
+
+    // 6. 결과 출력
+    memset(out_frame, 0, sizeof(*out_frame));
+    out_frame->can_id = cmd2 & CAN_SFF_MASK;
+    out_frame->can_dlc = (len > 8) ? 8 : len;
+    if (out_frame->can_dlc > 0) {
+        memcpy(out_frame->data, data, out_frame->can_dlc);
+    }
+
+    return 1; // 성공적으로 1개 읽음
+}
 
 static int init_ipc_device(const char *path) {
-    ipc_fd = open(path, O_RDONLY);
+    ipc_fd = open(path, O_RDONLY | O_NONBLOCK) ; // Blocking 모드로 열기 (필요시 O_NONBLOCK 추가 가능)
     if (ipc_fd < 0) {
         perror("open(ipc)");
         return -1;
@@ -192,79 +190,134 @@ static int init_ipc_device(const char *path) {
     return 0;
 }
 
-static int read_exact(int fd, uint8_t *buf, size_t len)
-{
-    size_t got = 0;
-    while (got < len) {
-        ssize_t r = read(fd, buf + got, len - got);
-        if (r < 0) {
-            if (errno == EINTR) continue;
-            return -1;
-        }
-        if (r == 0) return -1;
-        got += (size_t)r;
+
+// =============================================================
+// MAIN FUNCTION
+// =============================================================
+int main() {
+    signal(SIGINT, signal_handler);
+
+    printf("[Generator] Starting...\n");
+    p_shm = init_shared_memory();
+    if (p_shm == NULL) {
+        fprintf(stderr, "[Error] SHM init failed.\n");
+        return 1;
     }
+
+    if (init_ipc_device("/dev/tcc_ipc_micom") != 0) {
+        printf("IPC Init Failed!\n");
+        return 1;
+    }
+
+    struct can_frame frame;
+    double time_step = 0.0;
+    uint32_t check_id;
+    int print_counter = 0; // 출력 빈도 조절용
+
+    printf("[Generator] Started. (Reading BUFFERED data)\n");
+    printf("--------------------------------------------------------------------------------------------------------\n");
+    printf("  TIME  |  THROTTLE  |   BRAKE   |  STEER  | TRAFFIC |  IMU_X  |  IMU_Y  |  IMU_Z  |  DRIVE_DISTANCE \n");
+    printf("--------------------------------------------------------------------------------------------------------\n");
+
+    // =========================================================
+    // MAIN LOOP
+    // =========================================================
+    while (keep_running) {
+        
+        // [중요] IOCTL_IPC_FLUSH 삭제함! (데이터 유실 방지)
+
+        // [중요] Drain Loop: 커널 버퍼에 쌓인 데이터가 없을 때까지 계속 읽음
+        // AP1이 보내는 데이터가 쌓여 있어도 여기서 순식간에 다 처리됨.
+        int processed_count = 0;
+        
+        // Non-blocking 처럼 동작하게 하려면 O_NONBLOCK을 쓰거나, 
+        // 여기서는 간단히 일정 횟수만 돌고 sleep 하도록 처리 (Starvation 방지)
+        // 하지만 지금은 지연 해결이 목적이므로 buffer가 빌 때까지 읽는게 좋음.
+        // *주의: read_exact가 Blocking이면 데이터가 올 때까지 기다림. 
+        //        따라서 여기서는 1번 읽고, 데이터가 있으면 계속 읽는 방식.
+        
+        while (1) {
+            // IPC로부터 1프레임 읽기
+            int status = read_ipc_can_frame(ipc_fd, &frame);
+            
+            if (status < 0) {
+                // 치명적 에러 (장치 끊김 등)
+                perror("read error");
+                keep_running = 0;
+                break;
+            }
+            if (status == 0) {
+                // 읽은 데이터가 없음 (혹은 CRC 에러로 무시됨) -> 루프 탈출하고 대기
+                // *만약 Blocking 모드라면 여기서 대기하게 됨. 데이터 오면 바로 처리.
+                // Blocking 모드에서는 while(1)로 계속 읽으면 sleep을 못하므로, 
+                // AP1 데이터 폭주시 1회만 처리하고 넘어갈 수도 있음.
+                // 하지만 지금은 '지연'이 문제이므로,
+                // 아래 usleep을 줄이고 여기서 루프를 도는게 낫지는 않음 (Blocking일 경우).
+                // **수정**: IPC 드라이버가 보통 Blocking이므로, 
+                // 여기 while(1)을 쓰면 sleep 없이 100% CPU를 쓰며 실시간 처리함.
+                // 일단 하나 읽었으니 처리하고, 다시 위로 올라가는 구조가 안전함.
+                // 하지만 "지연"을 없애려면 모여있는걸 다 읽어야 함.
+                // IPC 특성상 read()가 리턴했다는건 데이터가 있었다는 뜻.
+                break; 
+            }
+
+            // 데이터 처리 (SHM 업데이트)
+            check_id = frame.can_id & CAN_EFF_MASK;
+            if (!(frame.can_id & CAN_EFF_FLAG)) {
+                check_id &= CAN_SFF_MASK;
+            }
+
+            switch (check_id) {
+                case CANID_VEHICLE_COMMAND1:
+                    p_shm->given_info.vehicle_command = SetVehicleCommandFromCAN(&frame);
+                    break;
+                case CANID_IMU_DATA:
+                    p_shm->given_info.imu_accel = SetIMUDataFromCAN(&frame);
+                    break;
+                case CANID_TRAFFIC_SIGN:
+                    p_shm->given_info.traffic_state = SetTrafficSignFromCAN(&frame);
+                    break;
+                default:
+                    break;
+            }
+            
+            processed_count++;
+
+            // [팁] 만약 AP1 데이터가 너무 빨라서 여기서 무한루프 돌 것 같으면
+            // 안전장치로 100개 처리하면 강제로 break 해서 화면 갱신하게 함
+            if (processed_count > 50) break; 
+        }
+
+        // --- 출력 (10번 루프 돌 때 1번만 출력) ---
+        print_counter++;
+        if (print_counter >= 10) {
+            printf("\r  %4.1fs |    %3.0f     |    %3.0f    |  %5.1f  |    %d    |  %4.2f  |  %4.2f  |  %4.2f  |  %4.2f  ", 
+                   time_step,
+                   p_shm->given_info.vehicle_command.throttle,
+                   p_shm->given_info.vehicle_command.brake,
+                   p_shm->given_info.vehicle_command.steer_tire_degree,
+                   p_shm->given_info.traffic_state.sign_state,
+                   p_shm->given_info.imu_accel.x_mps2,
+                   p_shm->given_info.imu_accel.y_mps2,
+                   p_shm->given_info.imu_accel.z_mps2,
+                   p_shm->given_info.drive_distance.data_km
+                   );
+            fflush(stdout); // 화면 갱신
+            print_counter = 0;
+            
+            // 시간 업데이트 (출력 할 때만 증가시키는게 보기에 좋음, 혹은 실제 시간 사용)
+            time_step += 0.1; 
+        }
+
+        // 너무 오래 쉬면 버퍼 쌓임. 100ms -> 10ms로 줄임. 
+        // Blocking read라면 이 sleep은 큰 의미 없지만, CPU 점유율 낮추기 위함.
+        usleep(10000); 
+    }
+
+    printf("\n[Generator] Shutting down.\n");
+    detach_shared_memory(p_shm);
+    destroy_shared_memory();
+    if (ipc_fd >= 0) close(ipc_fd);
+
     return 0;
-}
-
-static int read_ipc_can_frame(int fd, struct can_frame *out_frame)
-{
-    uint8_t hdr[IPC_HDR_SIZE];
-    uint8_t data[IPC_MAX_PACKET];
-    uint8_t window[3] = {0};
-    int synced = 0;
-
-    while (!synced) {
-        uint8_t b;
-        ssize_t r = read(fd, &b, 1);
-        if (r < 0) {
-            if (errno == EINTR) continue;
-            return -1;
-        }
-        if (r == 0) return -1;
-        window[0] = window[1];
-        window[1] = window[2];
-        window[2] = b;
-        if (window[0] == IPC_SYNC && window[1] == IPC_START1 && window[2] == IPC_START2) {
-            hdr[0] = window[0];
-            hdr[1] = window[1];
-            hdr[2] = window[2];
-            if (read_exact(fd, &hdr[3], IPC_HDR_SIZE - 3) != 0) return -1;
-            synced = 1;
-        }
-    }
-
-    uint16_t cmd1 = (uint16_t)((hdr[3] << 8) | hdr[4]);
-    uint16_t cmd2 = (uint16_t)((hdr[5] << 8) | hdr[6]);
-    uint16_t len  = (uint16_t)((hdr[7] << 8) | hdr[8]);
-    uint16_t data_len = len;
-    uint16_t rx_len = (len == 0) ? 1 : len;
-    uint16_t total = IPC_HDR_SIZE + rx_len + 2;
-    if (total > IPC_MAX_PACKET) {
-        errno = EIO;
-        return -1;
-    }
-
-    if (read_exact(fd, data, rx_len + 2) != 0) {
-        if (errno == 0) errno = EIO;
-        return -1;
-    }
-
-    uint16_t crc_calc = ipc_crc16(hdr, IPC_HDR_SIZE, 0);
-    crc_calc = ipc_crc16(data, rx_len, crc_calc);
-    uint16_t crc_recv = (uint16_t)((data[rx_len] << 8) | data[rx_len + 1]);
-    if (crc_calc != crc_recv) {
-        errno = EIO;
-        return -1;
-    }
-
-    memset(out_frame, 0, sizeof(*out_frame));
-    out_frame->can_id = cmd2 & CAN_SFF_MASK;
-    out_frame->can_dlc = (data_len > 8) ? 8 : data_len;
-    if (out_frame->can_dlc > 0) {
-        memcpy(out_frame->data, data, out_frame->can_dlc);
-    }
-
-    (void)cmd1;
-    return (int)sizeof(*out_frame);
 }
